@@ -54,6 +54,31 @@ jobs:
           cp -r /tmp/scaffold/android ./android
           python3 tools/apply_overlay.py
 
+      - name: Sign release build with the fixed key
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil, sys
+          gradle = pathlib.Path("android/app/build.gradle.kts")
+          text = gradle.read_text(encoding="utf-8")
+          if "signingConfigs.getByName(\"debug\")" not in text:
+              sys.exit("Template changed: release signingConfig line not found")
+          shutil.copy("android_overlay/debug.keystore", "android/app/doompal.keystore")
+          block = '''
+              signingConfigs {
+                  create("doompal") {
+                      storeFile = file("doompal.keystore")
+                      storePassword = "android"
+                      keyAlias = "androiddebugkey"
+                      keyPassword = "android"
+                  }
+              }
+          '''
+          text = text.replace("android {", "android {" + block, 1)
+          text = text.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("doompal")')
+          gradle.write_text(text, encoding="utf-8")
+          print("release build now signed with doompal.keystore")
+          PY
+
       - name: Get packages
         run: flutter pub get
 
