@@ -1,0 +1,90 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # SHA-256 of the certificate in android_overlay/debug.keystore.
+      # Every build must be signed with this same key, or updates will not install over the old app.
+      EXPECTED_CERT_SHA256: 1ae95ca9b8764f75f46b2f5e5602b73074d4806f4cbde949535e075d0623fcbc
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show versions
+        run: |
+          flutter --version
+          java -version
+
+      - name: Install fixed signing key
+        run: |
+          mkdir -p "$HOME/.android"
+          cp android_overlay/debug.keystore "$HOME/.android/debug.keystore"
+          if [ -n "${ANDROID_USER_HOME:-}" ]; then
+            mkdir -p "$ANDROID_USER_HOME"
+            cp android_overlay/debug.keystore "$ANDROID_USER_HOME/debug.keystore"
+          fi
+
+      - name: Generate Android scaffold and apply DoomPal overlay
+        run: |
+          flutter create --no-pub --project-name doompal --org io.doompal --platforms android /tmp/scaffold
+          rm -rf android
+          cp -r /tmp/scaffold/android ./android
+          python3 tools/apply_overlay.py
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Check the APK is signed with the fixed key
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          if [ ! -x "$BT/apksigner" ]; then
+            echo "::warning::apksigner not found, skipping signature check"
+            exit 0
+          fi
+          GOT=$("$BT/apksigner" verify --print-certs "$APK" | grep -m1 "certificate SHA-256 digest" | awk '{print $NF}')
+          echo "APK cert SHA-256: $GOT"
+          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK was signed with a different key ($GOT). Updates would not install over the existing app."
+            exit 1
+          fi
+
+      - name: Keep APK as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: doompal-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Publish to Releases (easy download on phone)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: DoomPal build ${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/app-release.apk
