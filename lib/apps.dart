@@ -59,42 +59,21 @@ String fmtDuration(int secs) {
 
 String fmtHour(int h) => '${h.toString().padLeft(2, '0')}:00';
 
-/// How healthy the sprout is right now: 1 = fresh, 0 = wilted.
-/// Uses the tightest of your limits. With no limit, it slowly droops over 100 reels.
-double plantHealth(Map<String, int> today, Map<String, int> s) {
-  var health = 1.0;
-  var anyLimit = false;
-  final total = s['total'] ?? -1;
-  if (total > 0) {
-    anyLimit = true;
-    health = 1 - sumTracked(today, s) / total;
-  } else if (total == 0) {
-    return 0;
-  }
-  for (final a in reelApps) {
-    if (!isTracked(a, s)) continue;
-    final l = s['limit:${a.key}'] ?? -1;
-    if (l > 0) {
-      anyLimit = true;
-      final h = 1 - (today[a.key] ?? 0) / l;
-      if (h < health) health = h;
-    }
-  }
-  if (!anyLimit) health = 1 - sumTracked(today, s) / 100;
-  return health.clamp(0.0, 1.0).toDouble();
-}
+/// The limit Doomy is really enforcing for [key] ("total" or "limit:youtube"): the one you set,
+/// tightened by the coach if needed. -1 means no limit, 0 means blocked.
+int effLimit(Map<String, int> s, String key) => s['eff:$key'] ?? s[key] ?? (key == 'total' ? 50 : -1);
 
 /// The limit to draw as ticks: the daily total, or the one app limit if that's all there is.
 ({int count, int limit})? tickTarget(Map<String, int> today, Map<String, int> s) {
-  final total = s['total'] ?? -1;
+  final total = effLimit(s, 'total');
   if (total > 0) return (count: sumTracked(today, s), limit: total);
   final withLimits = [
     for (final a in reelApps)
-      if (isTracked(a, s) && (s['limit:${a.key}'] ?? -1) > 0) a,
+      if (isTracked(a, s) && effLimit(s, 'limit:${a.key}') > 0) a,
   ];
   if (withLimits.length == 1) {
     final a = withLimits.first;
-    return (count: today[a.key] ?? 0, limit: s['limit:${a.key}']!);
+    return (count: today[a.key] ?? 0, limit: effLimit(s, 'limit:${a.key}'));
   }
   return null;
 }
@@ -113,11 +92,11 @@ String trackedNoun(Map<String, int> s) {
 /// Days in a row (counting today) that stayed within your limit.
 /// Returns null if no limit is set, so the screen can ask you to set one.
 int? streakDays(Map<String, Map<String, int>> hist, Map<String, int> s) {
-  final totalLimit = s['total'] ?? -1;
+  final totalLimit = effLimit(s, 'total');
   final perApp = <String, int>{};
   for (final a in reelApps) {
     if (!isTracked(a, s)) continue;
-    final l = s['limit:${a.key}'] ?? -1;
+    final l = effLimit(s, 'limit:${a.key}');
     if (l > 0) perApp[a.key] = l;
   }
   if (totalLimit <= 0 && perApp.isEmpty) return null;

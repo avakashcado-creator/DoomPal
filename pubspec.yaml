@@ -14,8 +14,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/doomy/
-    - assets/memes/
-    - assets/templates/
   fonts:
     - family: Anton
       fonts:

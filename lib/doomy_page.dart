@@ -110,17 +110,16 @@ class _DoomyPageState extends State<DoomyPage> {
     var week = 0;
     final now = DateTime.now();
     for (var i = 0; i < 7; i++) {
-      week += sumTracked(
-          hist[dateKey(DateTime(now.year, now.month, now.day - i))] ?? <String, int>{}, s);
+      week += sumTracked(hist[dateKey(DateTime(now.year, now.month, now.day - i))] ?? <String, int>{}, s);
     }
 
     switch (q) {
-      case 'how bad is it?':
+      case 'how cooked am i?':
         await _doomyTypes(howBad(total, noun, fmtDuration(secs), week, tickTarget(today, s)));
       case 'roast me':
         await _doomyTypes(roast(total, noun, secs ~/ 60));
       case 'send a meme':
-        final img = MemeBank.randomAny(_rnd);
+        final img = MemeBank.random(_rnd);
         final cap = 'ME AFTER $total ${noun.toUpperCase()}';
         await _doomyTypes(['[meme]${img ?? ''}|$cap|${pick(punchlines)}']);
       default:
@@ -186,8 +185,7 @@ class _DoomyPageState extends State<DoomyPage> {
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration:
-                BoxDecoration(color: Palette.bubble, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: Palette.bubble, borderRadius: BorderRadius.circular(20)),
             child: const Text('typing...', style: Txt.small),
           ),
         ],
@@ -225,14 +223,10 @@ class _DoomyPageState extends State<DoomyPage> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration:
-                  BoxDecoration(color: Palette.adYellow, borderRadius: BorderRadius.circular(5)),
+              decoration: BoxDecoration(color: Palette.adYellow, borderRadius: BorderRadius.circular(5)),
               child: const Text('Ad',
                   style: TextStyle(
-                      fontFamily: 'Figtree',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      color: Colors.black)),
+                      fontFamily: 'Figtree', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black)),
             ),
             const SizedBox(height: 6),
             Text(m.text.substring(5), style: Txt.body.copyWith(fontSize: 15)),

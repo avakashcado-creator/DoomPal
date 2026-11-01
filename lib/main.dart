@@ -5,7 +5,9 @@ import 'doomy_page.dart';
 import 'history_page.dart';
 import 'home_page.dart';
 import 'memes.dart';
+import 'native.dart';
 import 'settings_page.dart';
+import 'terms_page.dart';
 import 'theme.dart';
 
 void main() {
@@ -23,8 +25,44 @@ class DoomPalApp extends StatelessWidget {
       title: 'DoomPal',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
-      home: const Shell(),
+      home: const Root(),
     );
+  }
+}
+
+/// Shows the terms until they are accepted, then the app.
+class Root extends StatefulWidget {
+  const Root({super.key});
+
+  @override
+  State<Root> createState() => _RootState();
+}
+
+class _RootState extends State<Root> {
+  bool? _accepted;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final s = await Native.settings();
+      if (!mounted) return;
+      setState(() => _accepted = (s['terms'] ?? 0) == 1);
+    } catch (_) {
+      if (mounted) setState(() => _accepted = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = _accepted;
+    if (a == null) return const Scaffold(body: SizedBox.shrink());
+    if (!a) return TermsPage(onAccepted: () => setState(() => _accepted = true));
+    return const Shell();
   }
 }
 

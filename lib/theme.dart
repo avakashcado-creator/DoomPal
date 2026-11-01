@@ -16,42 +16,20 @@ class Palette {
 }
 
 class Txt {
-  static const wordmark = TextStyle(
-      fontFamily: 'Anton', fontSize: 30, letterSpacing: 0.5, color: Palette.white, height: 1.1);
-  static const meme =
-      TextStyle(fontFamily: 'Anton', fontSize: 30, height: 1.05, color: Colors.white);
-  static const bigNumber =
-      TextStyle(fontFamily: 'Anton', fontSize: 56, height: 1.0, color: Palette.white);
+  static const wordmark =
+      TextStyle(fontFamily: 'Anton', fontSize: 30, letterSpacing: 0.5, color: Palette.white, height: 1.1);
+  static const meme = TextStyle(fontFamily: 'Anton', fontSize: 30, height: 1.05, color: Colors.white);
+  static const bigNumber = TextStyle(fontFamily: 'Anton', fontSize: 56, height: 1.0, color: Palette.white);
   static const heading = TextStyle(
-      fontFamily: 'Figtree',
-      fontWeight: FontWeight.w600,
-      fontSize: 24,
-      height: 1.2,
-      color: Palette.white);
+      fontFamily: 'Figtree', fontWeight: FontWeight.w600, fontSize: 24, height: 1.2, color: Palette.white);
   static const title = TextStyle(
-      fontFamily: 'Figtree',
-      fontWeight: FontWeight.w600,
-      fontSize: 17,
-      height: 1.3,
-      color: Palette.white);
+      fontFamily: 'Figtree', fontWeight: FontWeight.w600, fontSize: 17, height: 1.3, color: Palette.white);
   static const body = TextStyle(
-      fontFamily: 'Figtree',
-      fontWeight: FontWeight.w400,
-      fontSize: 16,
-      height: 1.4,
-      color: Palette.white);
+      fontFamily: 'Figtree', fontWeight: FontWeight.w400, fontSize: 16, height: 1.4, color: Palette.white);
   static const quiet = TextStyle(
-      fontFamily: 'Figtree',
-      fontWeight: FontWeight.w400,
-      fontSize: 15,
-      height: 1.4,
-      color: Palette.muted);
+      fontFamily: 'Figtree', fontWeight: FontWeight.w400, fontSize: 15, height: 1.4, color: Palette.muted);
   static const small = TextStyle(
-      fontFamily: 'Figtree',
-      fontWeight: FontWeight.w400,
-      fontSize: 13,
-      height: 1.35,
-      color: Palette.muted);
+      fontFamily: 'Figtree', fontWeight: FontWeight.w400, fontSize: 13, height: 1.35, color: Palette.muted);
   static const label =
       TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w600, fontSize: 15, height: 1.2);
 }

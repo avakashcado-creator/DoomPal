@@ -25,13 +25,44 @@ SERVICE = """
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+        <activity
+            android:name=".GuestPassActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+"""
+
+SHARE_FILTERS = """
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
 """
 
 text = manifest.read_text(encoding="utf-8")
+if "USE_BIOMETRIC" not in text:
+    import re
+    m = re.search(r"<manifest[^>]*>", text)
+    if not m:
+        sys.exit("Unexpected manifest: no <manifest> tag found.")
+    perm = '\n    <uses-permission android:name="android.permission.USE_BIOMETRIC" />'
+    text = text[:m.end()] + perm + text[m.end():]
 if "ReelAccessibilityService" not in text:
     if "</application>" not in text:
         sys.exit("Unexpected manifest: no </application> tag found.")
     text = text.replace("</application>", SERVICE + "    </application>", 1)
+if "android.intent.action.SEND" not in text:
+    if "</activity>" not in text:
+        sys.exit("Unexpected manifest: no </activity> tag found.")
+    # the first activity in the template is MainActivity
+    text = text.replace("</activity>", SHARE_FILTERS + "        </activity>", 1)
 text = text.replace('android:label="doompal"', 'android:label="DoomPal"')
 manifest.write_text(text, encoding="utf-8")
 

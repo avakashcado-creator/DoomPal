@@ -171,7 +171,10 @@ class DoomyUi(private val c: Context) {
         return f
     }
 
-    /** A square meme: either a finished meme from assets/memes, or a template photo with captions. */
+    /**
+     * A square meme. Uses one of your own pictures (picked from your gallery) with outlined captions,
+     * or Doomy himself if you haven't added any yet.
+     */
     fun memeCard(topText: String, bottomText: String, heightDp: Int): FrameLayout {
         val frame = FrameLayout(c)
         val bg = GradientDrawable()
@@ -179,25 +182,24 @@ class DoomyUi(private val c: Context) {
         bg.setColor(card)
         frame.background = bg
         frame.clipToOutline = true
-        val memes = DoomyAssets.list(c, "memes")
-        val templates = DoomyAssets.list(c, "templates")
-        val useTemplate = templates.isNotEmpty() && (memes.isEmpty() || Math.random() < 0.6)
         val iv = ImageView(c)
-        if (useTemplate) {
-            DoomyAssets.drawable(c, "templates/" + DoomyLines.pick(templates))?.let { iv.setImageDrawable(it) }
-            iv.scaleType = ImageView.ScaleType.CENTER_CROP
-        } else if (memes.isNotEmpty()) {
-            DoomyAssets.drawable(c, "memes/" + DoomyLines.pick(memes))?.let { iv.setImageDrawable(it) }
-            iv.scaleType = ImageView.ScaleType.FIT_CENTER
-        } else {
+        val pics = Pictures.list(c)
+        var shown = false
+        if (pics.isNotEmpty()) {
+            val d = Pictures.drawable(c, DoomyLines.pick(pics))
+            if (d != null) {
+                iv.setImageDrawable(d)
+                iv.scaleType = ImageView.ScaleType.CENTER_CROP
+                shown = true
+            }
+        }
+        if (!shown) {
             DoomyAssets.doomy(c, "shocked")?.let { iv.setImageBitmap(it) }
             iv.scaleType = ImageView.ScaleType.FIT_CENTER
         }
         frame.addView(iv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        if (useTemplate || (memes.isEmpty() && templates.isEmpty())) {
-            frame.addView(caption(topText, 28f, Gravity.TOP, 10))
-            frame.addView(caption(bottomText, 28f, Gravity.BOTTOM, 10))
-        }
+        frame.addView(caption(topText, 28f, Gravity.TOP, 10))
+        frame.addView(caption(bottomText, 28f, Gravity.BOTTOM, 10))
         frame.layoutParams = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(heightDp))
         return frame
     }

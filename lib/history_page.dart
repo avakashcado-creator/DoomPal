@@ -21,20 +21,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   static const _short = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-  ];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   @override
   void initState() {
@@ -79,7 +66,7 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   int _dayLimit() {
-    final total = _settings['total'] ?? -1;
+    final total = effLimit(_settings, 'total');
     if (total > 0) return total;
     final t = tickTarget(const <String, int>{}, _settings);
     return t?.limit ?? -1;

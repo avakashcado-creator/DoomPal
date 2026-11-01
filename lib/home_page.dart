@@ -6,6 +6,7 @@ import 'apps.dart';
 import 'lines.dart';
 import 'memes.dart';
 import 'native.dart';
+import 'pictures_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -25,14 +26,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Map<String, int> _secs = {};
   Map<String, int> _settings = {};
   NativeStatus _status = const NativeStatus('', 0, 0, 0, 0);
+  CoachInfo? _coach;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    MemeBank.load().then((_) {
-      if (mounted) setState(() {});
-    });
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
   }
@@ -57,6 +56,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final time = await Native.timeHistory();
       final st = await Native.settings();
       final status = await Native.status();
+      final coach = await Native.coach();
+      await MemeBank.load();
       if (!mounted) return;
       final key = dateKey(DateTime.now());
       setState(() {
@@ -67,6 +68,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _secs = time[key] ?? <String, int>{};
         _settings = st;
         _status = status;
+        _coach = coach;
       });
     } catch (_) {}
   }
@@ -84,9 +86,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final tracked = reelApps.where((a) => isTracked(a, _settings)).toList();
     final noun = trackedNoun(_settings);
     final ticks = _ticksWithBonus();
-    final mood =
-        moodFor(counting: !_loaded || _enabled, total: total, secs: secs, noun: noun, ticks: ticks);
+    final mood = moodFor(counting: !_loaded || _enabled, total: total, secs: secs, noun: noun, ticks: ticks);
     final eq = equivalents(secs);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final guestLeft = (_status.guestUntil - nowMs) / 60000;
+    final coach = _coach;
+    final baseTotal = _settings['total'] ?? 50;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -102,11 +107,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(height: 14),
           _setupNote(),
         ],
+        const SizedBox(height: 10),
+        DoomySays(expr: mood.expr, text: mood.text),
+        if (guestLeft > 0) ...[
+          const SizedBox(height: 12),
+          _banner(
+            Icons.badge_outlined,
+            'guest pass is on: ${guestLeft.ceil()} min left. nothing counts, nothing blocks.',
+            Palette.blue,
+          ),
+        ],
         const SizedBox(height: 14),
-        MemeCard(image: MemeBank.templateOfTheDay(), top: mood.top, bottom: mood.bottom),
-        const SizedBox(height: 12),
-        DoomyPost(expr: mood.expr, text: mood.text),
-        const SizedBox(height: 22),
+        MemeCard(image: MemeBank.pictureOfTheDay(), top: mood.top, bottom: mood.bottom),
+        if (_loaded && MemeBank.pictures.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                await Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (_) => const PicturesPage()));
+                await MemeBank.load();
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+              label: const Text('Put your own pictures on these memes'),
+            ),
+          ),
+        const SizedBox(height: 18),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -125,11 +152,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(height: 10),
           LimitBar(count: ticks.count, limit: ticks.limit),
         ],
+        if (coach != null && coach.pct > 0 && baseTotal > 0) ...[
+          const SizedBox(height: 10),
+          Text(
+            'doomy tightened ur limit ${coach.pct}% (u set $baseTotal). he does that when u keep slipping.',
+            style: Txt.small.copyWith(color: Palette.adYellow),
+          ),
+        ],
         const SizedBox(height: 10),
         Text(
-          secs >= 60
-              ? 'about ${fmtDuration(secs)} of your life today.'
-              : 'barely any time lost today.',
+          secs >= 60 ? 'about ${fmtDuration(secs)} of your life today.' : 'barely any time lost today.',
           style: Txt.small.copyWith(fontSize: 14),
         ),
         if (eq.isNotEmpty) ...[
@@ -153,18 +185,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _banner(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Palette.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: Txt.small.copyWith(color: Palette.white, fontSize: 14))),
+        ],
+      ),
+    );
+  }
+
   Widget _appLine(ReelApp a) {
     final c = _today[a.key] ?? 0;
-    final lim = _settings['limit:${a.key}'] ?? -1;
+    final lim = effLimit(_settings, 'limit:${a.key}');
     final t = _secs[a.key] ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
-          Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: a.color, shape: BoxShape.circle)),
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: a.color, shape: BoxShape.circle)),
           const SizedBox(width: 12),
           Expanded(child: Text(a.label, style: Txt.body)),
           Text('$c', style: Txt.title),
@@ -172,8 +219,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           if (lim == 0) const Text('  blocked', style: Txt.small),
           SizedBox(
               width: 70,
-              child:
-                  Text(t >= 60 ? fmtDuration(t) : '', style: Txt.small, textAlign: TextAlign.end)),
+              child: Text(t >= 60 ? fmtDuration(t) : '', style: Txt.small, textAlign: TextAlign.end)),
         ],
       ),
     );
@@ -216,11 +262,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 const FilledButton(
                     onPressed: Native.openAccessibilitySettings, child: Text('Open Accessibility')),
               if (!_enabled)
-                const OutlinedButton(
-                    onPressed: Native.openAppInfo, child: Text('Switch greyed out?')),
+                const OutlinedButton(onPressed: Native.openAppInfo, child: Text('Switch greyed out?')),
               if (!_battery)
-                const OutlinedButton(
-                    onPressed: Native.openBatterySettings, child: Text('Battery settings')),
+                const OutlinedButton(onPressed: Native.openBatterySettings, child: Text('Battery settings')),
             ],
           ),
         ],
@@ -239,8 +283,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(width: 8),
           Expanded(
               child: Text(text,
-                  style: Txt.body
-                      .copyWith(fontSize: 15, color: done ? Palette.muted : Palette.white))),
+                  style: Txt.body.copyWith(fontSize: 15, color: done ? Palette.muted : Palette.white))),
         ],
       ),
     );

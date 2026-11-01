@@ -11,19 +11,40 @@ reels after your daily limit.
 
 ## Features
 
-- Counts Shorts/Reels live (YouTube Shorts and Instagram Reels on by default; Facebook and Snapchat optional).
-- Estimated time spent, per day and per app (measured from the gaps between swipes).
-- Daily total limit and per-app limits. "Block completely" mode.
-- Break-the-cycle tools: nudge popup every N reels, hard mode, a cap on snoozes per day,
-  quiet hours (for example 23:00 to 06:00), and a "take a break" screen with ideas of what to do instead.
-- Brain meter that drains as you approach your limit, and a streak of days within your limit.
-- Unlimited history with CSV export. All free, no accounts, no internet permission.
+- Counts Shorts and Reels live (YouTube Shorts and Instagram Reels by default; Facebook and Snapchat optional).
+- **Strict by default:** a daily total limit of 50, quiet hours from 23:00 to 06:00, one beg a day.
+- **The lock:** stricter changes apply at once, looser ones (a higher limit, turning something off) wait a
+  cooldown you choose, 24 hours to start. A 20 minute setup window after you accept the terms lets you tune
+  things first. Deleting history keeps today's numbers, so it can't be used to reset a limit.
+- **Doomy coach:** learns on the phone from the last 7 days. Tightens limits (up to 50%), lengthens the joke
+  ads and cuts begs when you keep hitting limits or begging. Eases back toward your own limit when you do
+  well. Never looser than the limit you set. It also learns your danger hours and checks in more often then.
+- **Guest pass:** for someone else (like a parent looking up a recipe). A fingerprint saved on the phone, then
+  Doomy watches the guest's first 10 swipes and cancels the pass if they scroll like the owner. See the
+  limits of this below.
+- **Health:** an eye break every 20 minutes of scrolling, and quiet hours so sleep wins.
+- Estimated time spent, an unlimited history with CSV export, and your own pictures on Doomy's memes.
+- Free, no accounts, no ads, no internet permission.
+
+### How reliable is the guest pass?
+
+Honestly, it's a speed bump, not a lock. Android's fingerprint prompt only says yes or no, never whose
+finger it was. The scroll-style check uses three timing numbers (pause between reels, swipe duration,
+scroll events per swipe). In a simulation with made-up styles it caught an owner scrolling normally and let
+through a guest with a clearly different pace, but it also cancelled a guest who happens to scroll like
+the owner, and an owner who deliberately scrolls differently for 10 swipes gets through. Nothing in the
+app can stop you turning off Accessibility, uninstalling, or changing the phone's clock either.
+
+### Permissions
+
+Accessibility (to count and block) and the fingerprint prompt (USE_BIOMETRIC, for the guest pass). There is
+no internet permission, so the app cannot send anything anywhere.
 
 ## Doomy
 
-Doomy is DoomPal's mascot. He counts your reels and roasts you about them.
+Doomy is DoomPal's mascot. He counts your reels and roasts you about them in Gen Alpha.
 
-- A live counter bubble sits at the top of the screen while you scroll Shorts.
+- A big live counter (with Doomy's face, which changes as you near your limit) sits at the top of the screen while you scroll Shorts.
 - He checks in when you open reels ("boi boi, no reels? why u scrolling").
 - At your limit he tells you to pack it up. You can beg for a few more, but you have to sit
   through a fake, unskippable joke ad first, and every beg makes the next ad longer.
@@ -31,15 +52,19 @@ Doomy is DoomPal's mascot. He counts your reels and roasts you about them.
 
 The ads are jokes made by the app. There are no real ads, no ad network, and no internet access.
 
-### Adding memes, GIFs and stickers
+### Your own pictures and stickers
 
-No code needed. Upload images into these folders on GitHub and they appear in the next build:
+In the Rules tab, "Use my own pictures" lets you add pictures, GIFs and stickers three ways:
 
-- `assets/memes/` for finished memes, GIFs and stickers. Shown as they are.
-- `assets/templates/` for plain reaction photos. Doomy writes captions on them ("ME AFTER 40 SHORTS").
+- **From gallery:** Android's photo picker. You choose, and the app only gets what you chose.
+- **From files:** the file picker, for things like `.webp` stickers saved to Downloads.
+- **Share:** DoomPal appears in other apps' Share menu for images. Share a sticker to DoomPal and
+  it lands in your pictures.
 
-PNG, JPG, GIF and WebP all work. GIFs animate. Remember this repository is public, so anything
-you upload here can be seen by others.
+DoomPal keeps private copies inside the app on your phone. Doomy puts captions on them ("ME AFTER
+30 SHORTS") and uses them on the Today screen, in the chat and in the joke ads. Nothing is uploaded
+and nothing is stored in this repository. DoomPal has no internet access, so it cannot browse
+Sticker.ly or any other catalog. Until you add some, Doomy uses his own art.
 
 ## How it works
 

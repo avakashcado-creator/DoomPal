@@ -1,52 +1,32 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import 'native.dart';
 import 'theme.dart';
 
-/// Every image in assets/memes (shown as-is) and assets/templates (captioned by Doomy).
-/// Add files to those folders on GitHub and they show up here, no code changes.
+/// Your own pictures, picked from your gallery and kept privately inside DoomPal.
 class MemeBank {
-  static List<String> memes = [];
-  static List<String> templates = [];
-  static bool _loaded = false;
+  static List<String> pictures = [];
 
   static Future<void> load() async {
-    if (_loaded) return;
     try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      final all = manifest.listAssets();
-      bool isImage(String a) {
-        final l = a.toLowerCase();
-        return l.endsWith('.png') ||
-            l.endsWith('.jpg') ||
-            l.endsWith('.jpeg') ||
-            l.endsWith('.gif') ||
-            l.endsWith('.webp');
-      }
-
-      memes = all.where((a) => a.startsWith('assets/memes/') && isImage(a)).toList()..sort();
-      templates = all.where((a) => a.startsWith('assets/templates/') && isImage(a)).toList()
-        ..sort();
-      _loaded = true;
+      pictures = await Native.listPictures();
     } catch (_) {}
   }
 
-  /// Same template all day, so the Today card doesn't flicker.
-  static String? templateOfTheDay() {
-    if (templates.isEmpty) return null;
+  /// Same picture all day, so the Today card doesn't flicker.
+  static String? pictureOfTheDay() {
+    if (pictures.isEmpty) return null;
     final d = DateTime.now();
-    return templates[(d.year * 400 + d.month * 31 + d.day) % templates.length];
+    return pictures[(d.year * 400 + d.month * 31 + d.day) % pictures.length];
   }
 
-  static String? randomAny(math.Random r) {
-    final all = [...memes, ...templates];
-    if (all.isEmpty) return null;
-    return all[r.nextInt(all.length)];
+  static String? random(math.Random r) {
+    if (pictures.isEmpty) return null;
+    return pictures[r.nextInt(pictures.length)];
   }
-
-  static bool isTemplate(String path) => path.startsWith('assets/templates/');
 }
 
 /// White Anton with a black outline, the classic meme caption.
@@ -78,25 +58,30 @@ class MemeCaption extends StatelessWidget {
   }
 }
 
-/// A square meme. Templates get top and bottom captions; finished memes are shown as they are.
+/// A square meme: one of your pictures with outlined captions, or Doomy if you haven't added any.
 class MemeCard extends StatelessWidget {
   final String? image;
   final String top;
   final String bottom;
   final double captionSize;
-  const MemeCard(
-      {super.key,
-      required this.image,
-      required this.top,
-      required this.bottom,
-      this.captionSize = 30});
+  const MemeCard({
+    super.key,
+    required this.image,
+    required this.top,
+    required this.bottom,
+    this.captionSize = 30,
+  });
+
+  Widget _doomy() => Padding(
+        padding: const EdgeInsets.all(48),
+        child: Image.asset('assets/doomy/shocked.png', fit: BoxFit.contain),
+      );
 
   @override
   Widget build(BuildContext context) {
     final img = image;
-    final captioned = img == null || MemeBank.isTemplate(img);
     return Semantics(
-      label: captioned ? 'Meme: $top. $bottom' : 'Meme picture',
+      label: 'Meme: $top. $bottom',
       image: true,
       child: AspectRatio(
         aspectRatio: 1,
@@ -108,22 +93,16 @@ class MemeCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (img != null)
-                  Image.asset(img,
-                      fit: captioned ? BoxFit.cover : BoxFit.contain, gaplessPlayback: true)
+                  Image.file(
+                    File(img),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (context, error, stack) => _doomy(),
+                  )
                 else
-                  Padding(
-                    padding: const EdgeInsets.all(48),
-                    child: Image.asset('assets/doomy/shocked.png', fit: BoxFit.contain),
-                  ),
-                if (captioned) ...[
-                  Positioned(
-                      left: 12, right: 12, top: 10, child: MemeCaption(top, size: captionSize)),
-                  Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 10,
-                      child: MemeCaption(bottom, size: captionSize)),
-                ],
+                  _doomy(),
+                Positioned(left: 12, right: 12, top: 10, child: MemeCaption(top, size: captionSize)),
+                Positioned(left: 12, right: 12, bottom: 10, child: MemeCaption(bottom, size: captionSize)),
               ],
             ),
           ),
@@ -200,6 +179,65 @@ class DoomyPost extends StatelessWidget {
           Text(text, style: Txt.body.copyWith(fontSize: 17, height: 1.35)),
         ],
       ),
+    );
+  }
+}
+
+/// Doomy, big, with a speech bubble. The first thing on the Today screen so he's impossible to miss.
+class DoomySays extends StatefulWidget {
+  final String expr;
+  final String text;
+  const DoomySays({super.key, required this.expr, required this.text});
+
+  @override
+  State<DoomySays> createState() => _DoomySaysState();
+}
+
+class _DoomySaysState extends State<DoomySays> with SingleTickerProviderStateMixin {
+  late final AnimationController _bob = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _bob.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.of(context).disableAnimations;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: _bob,
+          builder: (context, child) => Transform.translate(
+            offset: Offset(0, still ? 0 : -5 * Curves.easeInOut.transform(_bob.value)),
+            child: child,
+          ),
+          child: DoomyAvatar(widget.expr, size: 132),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: Palette.bubble,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                topRight: Radius.circular(22),
+                bottomLeft: Radius.circular(22),
+                bottomRight: Radius.circular(22),
+              ),
+              border: Border.all(color: Palette.doomy.withValues(alpha: 0.7), width: 2),
+            ),
+            child: Text(widget.text,
+                style: Txt.body.copyWith(fontSize: 18, height: 1.3, fontWeight: FontWeight.w500)),
+          ),
+        ),
+      ],
     );
   }
 }

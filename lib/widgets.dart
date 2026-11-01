@@ -68,8 +68,7 @@ class _WeekPainter extends CustomPainter {
   _WeekPainter(this.days, this.limit);
 
   void _text(Canvas c, String s, TextStyle style, Offset center) {
-    final tp = TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)
-      ..layout();
+    final tp = TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)..layout();
     tp.paint(c, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
@@ -191,13 +190,10 @@ Future<T?> pickChoice<T>(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-                  child: Text(title, style: Txt.title)),
+              Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 4), child: Text(title, style: Txt.title)),
               if (note != null)
                 Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                    child: Text(note, style: Txt.quiet)),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8), child: Text(note, style: Txt.quiet)),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
@@ -212,11 +208,10 @@ Future<T?> pickChoice<T>(
                             children: [
                               Expanded(
                                 child: Text(c.label,
-                                    style: Txt.body.copyWith(
-                                        color: c.value == current ? Palette.doomy : Palette.white)),
+                                    style: Txt.body
+                                        .copyWith(color: c.value == current ? Palette.doomy : Palette.white)),
                               ),
-                              if (c.value == current)
-                                const Icon(Icons.check, color: Palette.doomy, size: 20),
+                              if (c.value == current) const Icon(Icons.check, color: Palette.doomy, size: 20),
                             ],
                           ),
                         ),
