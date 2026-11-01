@@ -1,6 +1,10 @@
 package io.doompal.doompal
 
 import android.accessibilityservice.AccessibilityService
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -14,15 +18,16 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 
 class ReelAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val lastScrollEvent = HashMap<String, Long>()
     private val lastCounted = HashMap<String, Long>()
+    private val adSkipStreak = HashMap<String, Int>()
     private var lastPassiveCheck = 0L
     private var overlay: View? = null
     private var overlayPkg: String = ""
@@ -67,6 +72,7 @@ class ReelAccessibilityService : AccessibilityService() {
         if (event == null) return
         val pkg = event.packageName?.toString() ?: return
         val app = Targets.byPackage(pkg) ?: return
+        if (!Store.isTracked(this, app)) return
         val now = System.currentTimeMillis()
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> handleScroll(event, app, pkg, now)
@@ -93,18 +99,18 @@ class ReelAccessibilityService : AccessibilityService() {
         val debug = debugOn()
         val lenient = Store.getSetting(this, "lenient", 0) == 1
 
-        // 1) Fast path: the view that scrolled is the reels pager itself.
+        // 1) The view that scrolled is the reels pager itself.
         val src: AccessibilityNodeInfo? = event.source
         val srcId = ReelDetector.shortId(src)
         val srcMatch = srcId != null && Targets.matches(app, srcId)
 
-        // 2) Otherwise look at the whole screen, and only trust it if the scrolled view is
-        //    big (the reels pager is full screen; comment sheets and carousels are not).
+        // 2) For apps without strict mode: look at the whole screen, and only trust it if the
+        //    scrolled view is big (comment sheets and carousels are not full screen).
         var treeMatch = false
         var sample = ""
         var ratio = -1f
         val root = rootInActiveWindow
-        if (!srcMatch && root != null) {
+        if (!srcMatch && root != null && (!app.strictSource || debug)) {
             val scan = ReelDetector.scan(root, app, debug)
             treeMatch = scan.matched
             sample = scan.sample
@@ -117,7 +123,8 @@ class ReelAccessibilityService : AccessibilityService() {
             }
         }
         val bigScroller = ratio < 0f || ratio >= TALL_RATIO
-        val inReels = lenient || srcMatch || (treeMatch && (srcId == null || bigScroller))
+        val screenOk = !app.strictSource && treeMatch && (srcId == null || bigScroller)
+        val inReels = lenient || srcMatch || screenOk
 
         if (debug) {
             val cls = event.className?.toString()?.substringAfterLast('.') ?: "?"
@@ -131,8 +138,33 @@ class ReelAccessibilityService : AccessibilityService() {
         }
         if (!inReels) return
 
+        // Sponsored items (ads) are not reels. Skip them, but never more than 3 in a row:
+        // if "ads" keep showing up, the detector is probably wrong, so count normally.
+        val adRoot = rootInActiveWindow
+        if (adRoot != null) {
+            val ad = ReelDetector.adReason(adRoot)
+            if (ad != null) {
+                val streak = (adSkipStreak[app.key] ?: 0) + 1
+                if (streak <= MAX_AD_SKIPS) {
+                    adSkipStreak[app.key] = streak
+                    if (debug) Store.log(this, "skipped ad (" + ad + ") in " + app.key)
+                    return
+                }
+                if (debug) Store.log(this, "ad filter ignored after " + MAX_AD_SKIPS + " in a row")
+            }
+        }
+        adSkipStreak[app.key] = 0
+
         lastCounted[app.key] = now
-        Store.increment(this, app.key)
+        val n = Store.increment(this, app.key)
+
+        // Gentle nudge every N reels
+        val nudge = Store.getSetting(this, "nudge", 10)
+        if (nudge > 0 && n % nudge == 0) {
+            val msg = n.toString() + " " + app.noun + " today, about " +
+                Limits.duration(Store.seconds(this, app.key))
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
 
         if (Store.isSnoozed(this)) return
         val reason = Limits.exceeded(this, app) ?: return
@@ -157,74 +189,136 @@ class ReelAccessibilityService : AccessibilityService() {
             TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
         ).toInt()
 
+    // ---- look and feel of the "Take a break" screen (same palette and fonts as the app) ----
+    private val moss = Color.rgb(0x15, 0x22, 0x1D)
+    private val vein = Color.rgb(0x2D, 0x43, 0x39)
+    private val lichen = Color.rgb(0xE3, 0xEA, 0xDB)
+    private val sage = Color.rgb(0x93, 0xA7, 0x99)
+    private val pollen = Color.rgb(0xE9, 0xC4, 0x6A)
+
+    private var fontCache = HashMap<String, Typeface>()
+
+    /** The app's own fonts live inside the APK under flutter_assets. Falls back to system fonts. */
+    private fun font(file: String, fallback: Typeface): Typeface {
+        fontCache[file]?.let { return it }
+        val tf = try {
+            Typeface.createFromAsset(assets, "flutter_assets/assets/fonts/" + file)
+        } catch (e: Exception) {
+            fallback
+        }
+        fontCache[file] = tf
+        return tf
+    }
+
+    private fun text(s: String, size: Float, color: Int, face: Typeface, topDp: Int, lineExtra: Float = 0f): TextView {
+        val t = TextView(this)
+        t.text = s
+        t.textSize = size
+        t.setTextColor(color)
+        t.typeface = face
+        t.gravity = Gravity.START
+        if (lineExtra > 0f) t.setLineSpacing(dp(lineExtra.toInt()).toFloat(), 1f)
+        val lp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        lp.topMargin = dp(topDp)
+        t.layoutParams = lp
+        return t
+    }
+
+    private fun pill(s: String, primary: Boolean, topDp: Int, onClick: () -> Unit): TextView {
+        val bg = GradientDrawable()
+        bg.cornerRadius = dp(28).toFloat()
+        if (primary) {
+            bg.setColor(pollen)
+        } else {
+            bg.setColor(Color.TRANSPARENT)
+            bg.setStroke(dp(1), vein)
+        }
+        val ripple = RippleDrawable(ColorStateList.valueOf(Color.argb(48, 255, 255, 255)), bg, null)
+        val t = TextView(this)
+        t.text = s
+        t.textSize = 16f
+        t.typeface = font("Figtree-SemiBold.ttf", Typeface.DEFAULT_BOLD)
+        t.setTextColor(if (primary) moss else lichen)
+        t.gravity = Gravity.CENTER
+        t.background = ripple
+        t.isClickable = true
+        t.isFocusable = true
+        t.setPadding(dp(20), dp(16), dp(20), dp(16))
+        t.setOnClickListener { onClick() }
+        val lp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        lp.topMargin = dp(topDp)
+        t.layoutParams = lp
+        return t
+    }
+
     private fun showOverlay(app: Targets.App, pkg: String, reason: String) {
         if (overlay != null) return
         val hard = Store.getSetting(this, "hard", 0) == 1
         val snoozeMin = Store.getSetting(this, "snooze", 5)
+        val maxSnooze = Store.getSetting(this, "maxSnooze", 2)
+        val used = Store.snoozesToday(this)
+        val snoozesLeft = if (maxSnooze < 0) 99 else maxSnooze - used
+        val canSnooze = !hard && snoozesLeft > 0
+        val goingHome = !canSnooze
+        val bedtime = Limits.inQuietHours(this)
+
+        val display = font("FrauncesDisplay.ttf", Typeface.SERIF)
+        val regular = font("Figtree-Regular.ttf", Typeface.DEFAULT)
 
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
-        box.gravity = Gravity.CENTER
-        box.setBackgroundColor(Color.parseColor("#F2111116"))
-        box.setPadding(dp(32), dp(32), dp(32), dp(32))
+        box.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        box.setBackgroundColor(Color.argb(0xF7, 0x15, 0x22, 0x1D))
+        box.setPadding(dp(32), dp(48), dp(32), dp(40))
         box.isClickable = true
         box.isFocusable = false
 
-        val title = TextView(this)
-        title.text = "Take a break"
-        title.setTextColor(Color.WHITE)
-        title.textSize = 32f
-        title.gravity = Gravity.CENTER
-        box.addView(title)
+        // the sprout on its shelf: drooping when you hit a limit, sleepy at bedtime
+        val plant = SproutView(this, if (bedtime) 0.55f else 0.12f, 3f)
+        val plantLp = LinearLayout.LayoutParams(dp(132), dp(176))
+        plant.layoutParams = plantLp
+        box.addView(plant)
+        val shelf = View(this)
+        shelf.setBackgroundColor(vein)
+        val shelfLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
+        shelfLp.topMargin = -dp(3)
+        shelf.layoutParams = shelfLp
+        box.addView(shelf)
 
-        val msg = TextView(this)
-        msg.text = reason + "\n\nToday so far: " + Store.total(this) + " reels."
-        msg.setTextColor(Color.parseColor("#CCCCCC"))
-        msg.textSize = 17f
-        msg.gravity = Gravity.CENTER
-        val msgLp = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        msgLp.topMargin = dp(16)
-        box.addView(msg, msgLp)
+        box.addView(text(if (bedtime) "Time to sleep." else "Take a break.", 44f, lichen, display, 28))
+        box.addView(text(reason, 17f, lichen, regular, 12, 3f))
 
-        if (hard) {
-            val note = TextView(this)
-            note.text = "Hard mode is on. Taking you home..."
-            note.setTextColor(Color.parseColor("#999999"))
-            note.textSize = 14f
-            note.gravity = Gravity.CENTER
-            val noteLp = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            noteLp.topMargin = dp(12)
-            box.addView(note, noteLp)
+        val total = Store.total(this)
+        val secs = Store.totalSeconds(this)
+        box.addView(text("Today: " + total + " so far, about " + Limits.duration(secs) + ".", 15f, sage, regular, 8))
+
+        val idea = IDEAS[((System.currentTimeMillis() / 60000L) % IDEAS.size).toInt()]
+        box.addView(text("Instead, " + idea, 17f, pollen, regular, 24, 3f))
+
+        if (goingHome) {
+            val why = if (hard) "Hard mode is on." else "You've used today's snoozes."
+            box.addView(text(why + " Taking you home in a moment.", 14f, sage, regular, 20))
         }
 
-        val homeBtn = Button(this)
-        homeBtn.text = "Take me home"
-        homeBtn.setOnClickListener { goHome() }
-        val btnLp = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        btnLp.topMargin = dp(28)
-        box.addView(homeBtn, btnLp)
+        box.addView(pill("Take me home", true, 32) { goHome() })
 
-        if (!hard) {
-            val snoozeBtn = Button(this)
-            snoozeBtn.text = "Give me " + snoozeMin + " more minutes"
-            snoozeBtn.setOnClickListener {
-                Store.setSnoozeUntil(
-                    this@ReelAccessibilityService,
-                    System.currentTimeMillis() + snoozeMin * 60_000L
-                )
-                hideOverlay()
-            }
-            val lp2 = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        if (canSnooze) {
+            var label = snoozeMin.toString() + " more minutes"
+            if (maxSnooze >= 0) label += " (" + snoozesLeft + " left today)"
+            box.addView(
+                pill(label, false, 12) {
+                    Store.addSnooze(this@ReelAccessibilityService)
+                    Store.setSnoozeUntil(
+                        this@ReelAccessibilityService,
+                        System.currentTimeMillis() + snoozeMin * 60_000L
+                    )
+                    hideOverlay()
+                }
             )
-            lp2.topMargin = dp(12)
-            box.addView(snoozeBtn, lp2)
         }
 
         val lp = WindowManager.LayoutParams(
@@ -245,7 +339,7 @@ class ReelAccessibilityService : AccessibilityService() {
             overlayApp = app
             watcherTicks = 0
             handler.postDelayed(watcher, WATCH_MS)
-            if (hard) handler.postDelayed(autoHome, HARD_HOME_MS)
+            if (goingHome) handler.postDelayed(autoHome, HARD_HOME_MS)
             if (debugOn()) Store.log(this, "overlay shown: " + reason)
         } catch (e: Exception) {
             Store.log(this, "overlay failed: " + e.message)
@@ -281,11 +375,24 @@ class ReelAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        private const val GESTURE_GAP_MS = 400L        // quiet time that separates two swipes
-        private const val MIN_COUNT_INTERVAL_MS = 700L // never count faster than this per app
-        private const val TALL_RATIO = 0.75f           // scrolled view must cover 75% of the screen
+        private const val GESTURE_GAP_MS = 400L
+        private const val MIN_COUNT_INTERVAL_MS = 700L
+        private const val TALL_RATIO = 0.75f
         private const val PASSIVE_THROTTLE_MS = 1500L
         private const val WATCH_MS = 700L
         private const val HARD_HOME_MS = 5000L
+        private const val MAX_AD_SKIPS = 3
+
+        private val IDEAS = listOf(
+            "drink a glass of water.",
+            "stand up and stretch for one minute.",
+            "step outside for five minutes.",
+            "text a friend instead.",
+            "take ten slow breaths.",
+            "read one page of a book.",
+            "tidy one small thing near you.",
+            "walk around the room.",
+            "think of one thing you would rather do tonight."
+        )
     }
 }

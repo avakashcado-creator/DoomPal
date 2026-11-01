@@ -2,6 +2,7 @@ package io.doompal.doompal
 
 import android.content.Intent
 import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,8 +17,13 @@ class MainActivity : FlutterActivity() {
                 val ctx = this@MainActivity
                 when (call.method) {
                     "isServiceEnabled" -> result.success(isServiceEnabled())
+                    "isBatteryUnrestricted" -> result.success(isBatteryUnrestricted())
                     "openAccessibilitySettings" -> {
                         openSafely(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(null)
+                    }
+                    "openBatterySettings" -> {
+                        openSafely(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                         result.success(null)
                     }
                     "openAppInfo" -> {
@@ -30,6 +36,7 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "getHistory" -> result.success(Store.history(ctx))
+                    "getTime" -> result.success(Store.timeHistory(ctx))
                     "getSettings" -> result.success(Store.allSettings(ctx))
                     "getStatus" -> result.success(Store.status(ctx))
                     "setSetting" -> {
@@ -73,5 +80,10 @@ class MainActivity : FlutterActivity() {
         ) ?: return false
         val me = packageName + "/"
         return enabled.split(':').any { it.startsWith(me) && it.endsWith("ReelAccessibilityService") }
+    }
+
+    private fun isBatteryUnrestricted(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
     }
 }

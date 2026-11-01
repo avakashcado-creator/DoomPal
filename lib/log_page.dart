@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'native.dart';
+import 'theme.dart';
 
 class LogPage extends StatefulWidget {
   const LogPage({super.key});
@@ -45,19 +46,19 @@ class _LogPageState extends State<LogPage> {
         title: const Text('Detection log'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.copy),
-            tooltip: 'Copy',
+            icon: const Icon(Icons.copy_rounded),
+            tooltip: 'Copy log',
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: _text));
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Log copied')),
+                const SnackBar(content: Text('Log copied.')),
               );
             },
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            tooltip: 'Clear',
+            tooltip: 'Clear log',
             onPressed: () async {
               await Native.clearLog();
               await _load();
@@ -66,13 +67,22 @@ class _LogPageState extends State<LogPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: SelectableText(
-          _text.isEmpty
-              ? 'Nothing yet. Turn on "Detection log" in Limits, open a reels app and swipe a few times. Newest lines are on top.'
-              : _text,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-        ),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: _text.isEmpty
+            ? const Text(
+                'Nothing yet. Turn on "Keep a detection log" in Limits, open YouTube Shorts and swipe a few times. '
+                'The newest lines appear at the top.',
+                style: Txt.quiet,
+              )
+            : SelectableText(
+                _text,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  height: 1.5,
+                  color: Palette.lichen,
+                ),
+              ),
       ),
     );
   }

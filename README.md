@@ -9,6 +9,25 @@ reels after your daily limit.
 - Unlimited history with CSV export.
 - Built-in detection log for tuning when apps change their screens.
 
+## Features
+
+- Counts Shorts/Reels live (YouTube Shorts and Instagram Reels on by default; Facebook and Snapchat optional).
+- Estimated time spent, per day and per app (measured from the gaps between swipes).
+- Daily total limit and per-app limits. "Block completely" mode.
+- Break-the-cycle tools: nudge popup every N reels, hard mode, a cap on snoozes per day,
+  quiet hours (for example 23:00 to 06:00), and a "take a break" screen with ideas of what to do instead.
+- Brain meter that drains as you approach your limit, and a streak of days within your limit.
+- Unlimited history with CSV export. All free, no accounts, no internet permission.
+
+## Design
+
+"Greenhouse at night": deep moss green, pale lichen text and one pollen-yellow accent.
+Numbers and headings are set in Fraunces, everything else in Figtree (both under the SIL Open
+Font License, see `assets/fonts/`). The centrepiece is a sprout in a pot that grows a leaf for
+every day you stay within your limit, flowers after a week, and droops as you scroll towards
+your limit. The same sprout (drawn natively) appears on the "Take a break" screen, and the
+launcher icon is drawn from the same geometry.
+
 ## How it works
 
 An Android Accessibility Service listens only to the four apps (see
@@ -17,8 +36,10 @@ swipe starts on the reels screen:
 
 1. A burst of scroll events is treated as one swipe (400 ms quiet gap, max one count per 700 ms).
 2. If the scrolled view's id matches a reels keyword in `Targets.kt`, it counts.
-3. Otherwise the whole screen is scanned for a reels keyword, and it only counts if the scrolled
-   view is large (75% of the screen). This stops comment sheets and feed carousels from counting.
+3. Apps without "strict" mode (Instagram, Facebook, Snapchat) can also count when the screen has a
+   reels keyword and the scrolled view is large (75% of the screen height).
+4. YouTube is strict: only the Shorts pager itself counts, so scrolling comments never counts.
+5. Visible sponsored items ("Ad", "Sponsored") are skipped, at most 3 in a row.
 
 When a limit is hit, a full-screen "Take a break" overlay appears (an accessibility overlay, so no
 "display over other apps" permission is needed). It disappears when you leave the reels screen,

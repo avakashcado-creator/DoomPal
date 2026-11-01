@@ -13,6 +13,15 @@ class Native {
     await _ch.invokeMethod<void>('openAccessibilitySettings');
   }
 
+  static Future<bool> batteryUnrestricted() async {
+    final v = await _ch.invokeMethod<bool>('isBatteryUnrestricted');
+    return v ?? false;
+  }
+
+  static Future<void> openBatterySettings() async {
+    await _ch.invokeMethod<void>('openBatterySettings');
+  }
+
   static Future<void> openAppInfo() async {
     await _ch.invokeMethod<void>('openAppInfo');
   }
@@ -20,6 +29,21 @@ class Native {
   /// date (yyyy-MM-dd) -> app key -> count
   static Future<Map<String, Map<String, int>>> history() async {
     final raw = await _ch.invokeMethod<Map<dynamic, dynamic>>('getHistory');
+    final out = <String, Map<String, int>>{};
+    if (raw == null) return out;
+    raw.forEach((date, apps) {
+      final m = <String, int>{};
+      (apps as Map<dynamic, dynamic>).forEach((k, v) {
+        m[k as String] = (v as num).toInt();
+      });
+      out[date as String] = m;
+    });
+    return out;
+  }
+
+  /// date -> app key -> estimated seconds spent
+  static Future<Map<String, Map<String, int>>> timeHistory() async {
+    final raw = await _ch.invokeMethod<Map<dynamic, dynamic>>('getTime');
     final out = <String, Map<String, int>>{};
     if (raw == null) return out;
     raw.forEach((date, apps) {
@@ -45,11 +69,12 @@ class Native {
   /// lastApp (key or ''), lastTime (ms since epoch), snoozeUntil (ms since epoch)
   static Future<NativeStatus> status() async {
     final raw = await _ch.invokeMethod<Map<dynamic, dynamic>>('getStatus');
-    if (raw == null) return const NativeStatus('', 0, 0);
+    if (raw == null) return const NativeStatus('', 0, 0, 0);
     return NativeStatus(
       (raw['lastApp'] as String?) ?? '',
       ((raw['lastTime'] as num?) ?? 0).toInt(),
       ((raw['snoozeUntil'] as num?) ?? 0).toInt(),
+      ((raw['snoozesToday'] as num?) ?? 0).toInt(),
     );
   }
 
@@ -75,5 +100,7 @@ class NativeStatus {
   final String lastApp;
   final int lastTime;
   final int snoozeUntil;
-  const NativeStatus(this.lastApp, this.lastTime, this.snoozeUntil);
+  final int snoozesToday;
+  const NativeStatus(
+      this.lastApp, this.lastTime, this.snoozeUntil, this.snoozesToday);
 }

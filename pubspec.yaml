@@ -12,3 +12,18 @@ dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: FrauncesDisplay
+      fonts:
+        - asset: assets/fonts/FrauncesDisplay.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/FrauncesText.ttf
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/Figtree-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Figtree-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-SemiBold.ttf
+          weight: 600

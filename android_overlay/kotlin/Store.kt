@@ -7,19 +7,29 @@ import java.util.Locale
 
 /** All data lives in SharedPreferences on the phone. Nothing is ever sent anywhere. */
 object Store {
+    private const val MAX_GAP_MS = 120_000L // longer than this between two reels = a new session
+    private const val FIRST_REEL_SECS = 20  // guess for the first reel of a session
+
     private fun prefs(c: Context) = c.getSharedPreferences("doompal", Context.MODE_PRIVATE)
 
     fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
-    // ---- counts: key "c|yyyy-MM-dd|appKey" ----
+    // ---- counts "c|date|app" and estimated seconds "t|date|app" ----
     fun increment(c: Context, app: String): Int {
-        val k = "c|" + today() + "|" + app
         val p = prefs(c)
-        val n = p.getInt(k, 0) + 1
+        val now = System.currentTimeMillis()
+        val day = today()
+        val ck = "c|" + day + "|" + app
+        val tk = "t|" + day + "|" + app
+        val n = p.getInt(ck, 0) + 1
+        val lastApp = p.getString("lastApp", "") ?: ""
+        val gap = now - p.getLong("lastTime", 0L)
+        val addSecs = if (lastApp == app && gap in 1L..MAX_GAP_MS) (gap / 1000L).toInt() else FIRST_REEL_SECS
         p.edit()
-            .putInt(k, n)
+            .putInt(ck, n)
+            .putInt(tk, p.getInt(tk, 0) + addSecs)
             .putString("lastApp", app)
-            .putLong("lastTime", System.currentTimeMillis())
+            .putLong("lastTime", now)
             .apply()
         return n
     }
@@ -28,14 +38,26 @@ object Store {
 
     fun total(c: Context): Int {
         var sum = 0
-        for (a in Targets.all) sum += count(c, a.key)
+        for (a in Targets.all) {
+            if (isTracked(c, a)) sum += count(c, a.key)
+        }
         return sum
     }
 
-    fun history(c: Context): HashMap<String, HashMap<String, Int>> {
+    fun seconds(c: Context, app: String): Int = prefs(c).getInt("t|" + today() + "|" + app, 0)
+
+    fun totalSeconds(c: Context): Int {
+        var sum = 0
+        for (a in Targets.all) {
+            if (isTracked(c, a)) sum += seconds(c, a.key)
+        }
+        return sum
+    }
+
+    private fun grouped(c: Context, prefix: String): HashMap<String, HashMap<String, Int>> {
         val out = HashMap<String, HashMap<String, Int>>()
         for ((k, v) in prefs(c).all) {
-            if (!k.startsWith("c|") || v !is Int) continue
+            if (!k.startsWith(prefix) || v !is Int) continue
             val parts = k.split("|")
             if (parts.size != 3) continue
             val day = out.getOrPut(parts[1]) { HashMap() }
@@ -44,13 +66,26 @@ object Store {
         return out
     }
 
+    fun history(c: Context): HashMap<String, HashMap<String, Int>> = grouped(c, "c|")
+
+    fun timeHistory(c: Context): HashMap<String, HashMap<String, Int>> = grouped(c, "t|")
+
     fun clearHistory(c: Context) {
         val p = prefs(c)
         val e = p.edit()
         for (k in p.all.keys) {
-            if (k.startsWith("c|")) e.remove(k)
+            if (k.startsWith("c|") || k.startsWith("t|") || k.startsWith("z|")) e.remove(k)
         }
         e.remove("lastApp").remove("lastTime").apply()
+    }
+
+    // ---- snoozes used today ----
+    fun snoozesToday(c: Context): Int = prefs(c).getInt("z|" + today(), 0)
+
+    fun addSnooze(c: Context) {
+        val k = "z|" + today()
+        val p = prefs(c)
+        p.edit().putInt(k, p.getInt(k, 0) + 1).apply()
     }
 
     /** Small status map for the Today screen. */
@@ -60,6 +95,7 @@ object Store {
         out["lastApp"] = p.getString("lastApp", "") ?: ""
         out["lastTime"] = p.getLong("lastTime", 0L)
         out["snoozeUntil"] = p.getLong("snoozeUntil", 0L)
+        out["snoozesToday"] = snoozesToday(c)
         return out
     }
 
@@ -77,6 +113,9 @@ object Store {
         }
         return out
     }
+
+    fun isTracked(c: Context, app: Targets.App): Boolean =
+        getSetting(c, "track:" + app.key, if (app.defaultOn) 1 else 0) == 1
 
     // ---- snooze ----
     fun snoozeUntil(c: Context): Long = prefs(c).getLong("snoozeUntil", 0L)
