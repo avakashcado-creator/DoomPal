@@ -8,7 +8,6 @@ import 'widgets.dart';
 
 // -1 = off, 0 = block completely
 const List<int> _limitPresets = [-1, 0, 5, 10, 20, 30, 50, 75, 100, 150, 200];
-const List<int> _snoozePresets = [1, 5, 10, 15, 30];
 const List<int> _maxSnoozePresets = [-1, 1, 2, 3, 5];
 const List<int> _nudgePresets = [0, 5, 10, 20, 30];
 
@@ -50,7 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _section(String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 6),
-      child: Text(text, style: Txt.title.copyWith(color: Palette.sage)),
+      child: Text(text, style: Txt.title.copyWith(color: Palette.muted)),
     );
   }
 
@@ -82,7 +81,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             if (value != null) ...[
               const SizedBox(width: 16),
-              Text(value, style: Txt.body.copyWith(color: Palette.pollen)),
+              Text(value, style: Txt.body.copyWith(color: Palette.doomy)),
             ],
             if (trailing != null) ...[const SizedBox(width: 16), trailing],
           ],
@@ -91,8 +90,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _switch(String title, String? subtitle, String key,
-      {int fallback = 0}) {
+  Widget _switch(String title, String? subtitle, String key, {int fallback = 0}) {
     final on = (_s[key] ?? fallback) == 1;
     return _row(
       title: title,
@@ -141,12 +139,11 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep history',
-                style: TextStyle(color: Palette.lichen)),
+            child: const Text('Keep history', style: TextStyle(color: Palette.white)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Palette.straw),
+            style: FilledButton.styleFrom(backgroundColor: Palette.danger),
             child: const Text('Delete history'),
           ),
         ],
@@ -171,13 +168,13 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text('Limits', style: Txt.heading),
+          child: Text('RULES', style: Txt.wordmark),
         ),
         const Padding(
           padding: EdgeInsets.fromLTRB(24, 10, 24, 0),
           child: Text(
-            'When you reach a limit, DoomPal covers the reels screen and offers to take you home. '
-            'The rest of the app keeps working.',
+            'Set the rules. Doomy enforces them. When you hit a limit he covers the reels screen, '
+            'and the rest of the app keeps working.',
             style: Txt.quiet,
           ),
         ),
@@ -198,32 +195,52 @@ class _SettingsPageState extends State<SettingsPage> {
               presets: _limitPresets,
               label: _limitLabel,
             ),
-        _section('Breaking the habit'),
+        _section('Doomy'),
+        _switch('Live counter', 'A small bubble with ur count while u scroll', 'counter',
+            fallback: 1),
+        _switch('Check on me when I open reels', '"boi boi, no reels? why u scrolling"', 'gate',
+            fallback: 1),
+        if ((_s['gate'] ?? 1) == 1)
+          _choice(
+            title: 'Check again after',
+            key: 'gateEvery',
+            fallback: 15,
+            presets: const [5, 10, 15, 30, 60],
+            label: (v) => '$v min',
+          ),
         _choice(
-          title: 'Reminder while scrolling',
-          subtitle: 'A short message like "10 Shorts today, about 5 min"',
+          title: 'Doomy comments every',
+          subtitle: 'Little messages like "20 already?? blink twice"',
           key: 'nudge',
           fallback: 10,
           presets: _nudgePresets,
-          label: (v) => v == 0 ? 'Off' : 'Every $v',
+          label: (v) => v == 0 ? 'Never' : '$v reels',
         ),
-        _switch('Hard mode',
-            'No snoozing. You go straight home when you hit a limit.', 'hard'),
+        _section('Begging'),
+        _switch('Hard mode', 'No begging. You go straight home at the limit.', 'hard'),
         if (!hard) ...[
           _choice(
-            title: 'Snoozes a day',
-            subtitle: 'After these, the limit can\'t be skipped',
+            title: 'Begs a day',
+            subtitle: 'After these, Doomy stops listening',
             key: 'maxSnooze',
             fallback: 2,
             presets: _maxSnoozePresets,
             label: (v) => v < 0 ? 'Unlimited' : '$v',
           ),
           _choice(
-            title: 'Each snooze lasts',
-            key: 'snooze',
+            title: 'Reels per beg',
+            key: 'begReels',
             fallback: 5,
-            presets: _snoozePresets,
-            label: (v) => '$v min',
+            presets: const [3, 5, 10],
+            label: (v) => '$v more',
+          ),
+          _choice(
+            title: 'Ad length',
+            subtitle: 'Gets longer with every beg',
+            key: 'adSecs',
+            fallback: 10,
+            presets: const [5, 10, 15, 20, 30],
+            label: (v) => '$v sec',
           ),
         ],
         _section('Bedtime'),
@@ -260,31 +277,30 @@ class _SettingsPageState extends State<SettingsPage> {
           'Only if reels in an app aren\'t being counted. Counts the feed too.',
           'lenient',
         ),
-        _switch('Keep a detection log',
-            'Records what DoomPal sees, for fixing detection', 'debug'),
+        _switch('Keep a detection log', 'Records what DoomPal sees, for fixing detection', 'debug'),
         _row(
           title: 'Open detection log',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const LogPage()),
           ),
-          trailing: const Icon(Icons.chevron_right, color: Palette.sage),
+          trailing: const Icon(Icons.chevron_right, color: Palette.muted),
         ),
         _section('This phone'),
         _row(
           title: 'Battery settings',
           subtitle: 'Choose Unrestricted so Android never stops the counter',
           onTap: Native.openBatterySettings,
-          trailing: const Icon(Icons.chevron_right, color: Palette.sage),
+          trailing: const Icon(Icons.chevron_right, color: Palette.muted),
         ),
         _row(
           title: 'Delete all history',
-          titleColor: Palette.straw,
+          titleColor: Palette.danger,
           onTap: _confirmClear,
         ),
         const Padding(
           padding: EdgeInsets.fromLTRB(24, 28, 24, 0),
           child: Text(
-            'Everything DoomPal records stays on this phone. It has no internet access.',
+            'Everything Doomy sees stays on this phone. He has no internet access, and the ads are jokes, not real ads.',
             style: Txt.small,
           ),
         ),

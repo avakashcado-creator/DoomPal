@@ -1,99 +1,78 @@
 import 'package:flutter/material.dart';
 
-/// "Greenhouse at night": deep moss, pale lichen text, one pollen accent.
+/// Instagram-at-night: true black, white type, Doomy's lavender, one blue for "verified" and your messages.
 class Palette {
-  static const moss = Color(0xFF15221D); // background
-  static const bark = Color(0xFF1D2E27); // raised surfaces (sheets, notes)
-  static const vein = Color(0xFF2D4339); // hairlines, empty ticks
-  static const lichen = Color(0xFFE3EADB); // main text
-  static const sage = Color(0xFF93A799); // quiet text
-  static const pollen = Color(0xFFE9C46A); // the accent
-  static const petal = Color(0xFFF2C4D0); // flowers, streaks
-  static const straw = Color(0xFFC9A45C); // over the limit
+  static const ink = Color(0xFF000000);
+  static const card = Color(0xFF121212);
+  static const bubble = Color(0xFF262626);
+  static const line = Color(0xFF262626);
+  static const white = Color(0xFFF5F5F5);
+  static const muted = Color(0xFFA8A8A8);
+  static const doomy = Color(0xFFA99BFF);
+  static const blue = Color(0xFF3797F0);
+  static const danger = Color(0xFFFF5C5C);
+  static const live = Color(0xFF58C322);
+  static const adYellow = Color(0xFFFFD44D);
 }
 
-/// Type scale. Fraunces carries numbers and headings, Figtree does the reading.
 class Txt {
-  static const _tabular = [FontFeature.tabularFigures()];
-
-  static const display = TextStyle(
-    fontFamily: 'FrauncesDisplay',
-    fontWeight: FontWeight.w400,
-    fontSize: 104,
-    height: 1.0,
-    letterSpacing: -3,
-    color: Palette.lichen,
-    fontFeatures: _tabular,
-  );
+  static const wordmark = TextStyle(
+      fontFamily: 'Anton', fontSize: 30, letterSpacing: 0.5, color: Palette.white, height: 1.1);
+  static const meme =
+      TextStyle(fontFamily: 'Anton', fontSize: 30, height: 1.05, color: Colors.white);
+  static const bigNumber =
+      TextStyle(fontFamily: 'Anton', fontSize: 56, height: 1.0, color: Palette.white);
   static const heading = TextStyle(
-    fontFamily: 'Fraunces',
-    fontWeight: FontWeight.w400,
-    fontSize: 30,
-    height: 1.15,
-    letterSpacing: -0.4,
-    color: Palette.lichen,
-  );
+      fontFamily: 'Figtree',
+      fontWeight: FontWeight.w600,
+      fontSize: 24,
+      height: 1.2,
+      color: Palette.white);
   static const title = TextStyle(
-    fontFamily: 'Fraunces',
-    fontWeight: FontWeight.w400,
-    fontSize: 20,
-    height: 1.3,
-    color: Palette.lichen,
-  );
-  static const number = TextStyle(
-    fontFamily: 'Fraunces',
-    fontWeight: FontWeight.w400,
-    fontSize: 20,
-    height: 1.2,
-    color: Palette.lichen,
-    fontFeatures: _tabular,
-  );
+      fontFamily: 'Figtree',
+      fontWeight: FontWeight.w600,
+      fontSize: 17,
+      height: 1.3,
+      color: Palette.white);
   static const body = TextStyle(
-    fontFamily: 'Figtree',
-    fontWeight: FontWeight.w400,
-    fontSize: 16,
-    height: 1.45,
-    color: Palette.lichen,
-  );
+      fontFamily: 'Figtree',
+      fontWeight: FontWeight.w400,
+      fontSize: 16,
+      height: 1.4,
+      color: Palette.white);
   static const quiet = TextStyle(
-    fontFamily: 'Figtree',
-    fontWeight: FontWeight.w400,
-    fontSize: 15,
-    height: 1.45,
-    color: Palette.sage,
-  );
+      fontFamily: 'Figtree',
+      fontWeight: FontWeight.w400,
+      fontSize: 15,
+      height: 1.4,
+      color: Palette.muted);
   static const small = TextStyle(
-    fontFamily: 'Figtree',
-    fontWeight: FontWeight.w400,
-    fontSize: 13,
-    height: 1.4,
-    color: Palette.sage,
-  );
-  static const label = TextStyle(
-    fontFamily: 'Figtree',
-    fontWeight: FontWeight.w600,
-    fontSize: 15,
-    height: 1.2,
-  );
+      fontFamily: 'Figtree',
+      fontWeight: FontWeight.w400,
+      fontSize: 13,
+      height: 1.35,
+      color: Palette.muted);
+  static const label =
+      TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w600, fontSize: 15, height: 1.2);
 }
 
 ThemeData buildTheme() {
   const scheme = ColorScheme.dark(
-    primary: Palette.pollen,
-    onPrimary: Palette.moss,
-    secondary: Palette.petal,
-    onSecondary: Palette.moss,
-    surface: Palette.moss,
-    onSurface: Palette.lichen,
-    surfaceContainerHighest: Palette.bark,
-    outline: Palette.vein,
-    outlineVariant: Palette.vein,
-    error: Color(0xFFE8907E),
+    primary: Palette.doomy,
+    onPrimary: Palette.ink,
+    secondary: Palette.blue,
+    onSecondary: Colors.white,
+    surface: Palette.ink,
+    onSurface: Palette.white,
+    surfaceContainerHighest: Palette.card,
+    outline: Palette.line,
+    outlineVariant: Palette.line,
+    error: Palette.danger,
   );
   return ThemeData(
     colorScheme: scheme,
-    scaffoldBackgroundColor: Palette.moss,
-    canvasColor: Palette.moss,
+    scaffoldBackgroundColor: Palette.ink,
+    canvasColor: Palette.ink,
     fontFamily: 'Figtree',
     splashFactory: InkRipple.splashFactory,
     textTheme: const TextTheme(
@@ -104,11 +83,10 @@ ThemeData buildTheme() {
       titleLarge: Txt.title,
       headlineSmall: Txt.heading,
     ),
-    dividerTheme:
-        const DividerThemeData(color: Palette.vein, thickness: 1, space: 1),
+    dividerTheme: const DividerThemeData(color: Palette.line, thickness: 1, space: 1),
     appBarTheme: const AppBarTheme(
-      backgroundColor: Palette.moss,
-      foregroundColor: Palette.lichen,
+      backgroundColor: Palette.ink,
+      foregroundColor: Palette.white,
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
@@ -116,56 +94,53 @@ ThemeData buildTheme() {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? Palette.moss : Palette.sage,
+        (s) => s.contains(WidgetState.selected) ? Palette.ink : Palette.muted,
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? Palette.pollen : Palette.moss,
+        (s) => s.contains(WidgetState.selected) ? Palette.doomy : Palette.ink,
       ),
       trackOutlineColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? Palette.pollen : Palette.vein,
+        (s) => s.contains(WidgetState.selected) ? Palette.doomy : Palette.line,
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: Palette.pollen,
-        foregroundColor: Palette.moss,
+        backgroundColor: Palette.doomy,
+        foregroundColor: Palette.ink,
         textStyle: Txt.label,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: Palette.lichen,
+        foregroundColor: Palette.white,
         textStyle: Txt.label,
-        side: const BorderSide(color: Palette.vein),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        shape: const StadiumBorder(),
+        side: const BorderSide(color: Palette.line),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-          foregroundColor: Palette.pollen, textStyle: Txt.label),
+      style: TextButton.styleFrom(foregroundColor: Palette.blue, textStyle: Txt.label),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: Palette.bark,
+      backgroundColor: Palette.bubble,
       contentTextStyle: Txt.body,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: Palette.bark,
+      backgroundColor: Palette.card,
       showDragHandle: true,
-      dragHandleColor: Palette.vein,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      dragHandleColor: Palette.line,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: Palette.bark,
+      backgroundColor: Palette.card,
       titleTextStyle: Txt.title,
       contentTextStyle: Txt.quiet,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
   );
 }

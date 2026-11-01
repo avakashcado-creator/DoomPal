@@ -19,14 +19,27 @@ reels after your daily limit.
 - Brain meter that drains as you approach your limit, and a streak of days within your limit.
 - Unlimited history with CSV export. All free, no accounts, no internet permission.
 
-## Design
+## Doomy
 
-"Greenhouse at night": deep moss green, pale lichen text and one pollen-yellow accent.
-Numbers and headings are set in Fraunces, everything else in Figtree (both under the SIL Open
-Font License, see `assets/fonts/`). The centrepiece is a sprout in a pot that grows a leaf for
-every day you stay within your limit, flowers after a week, and droops as you scroll towards
-your limit. The same sprout (drawn natively) appears on the "Take a break" screen, and the
-launcher icon is drawn from the same geometry.
+Doomy is DoomPal's mascot. He counts your reels and roasts you about them.
+
+- A live counter bubble sits at the top of the screen while you scroll Shorts.
+- He checks in when you open reels ("boi boi, no reels? why u scrolling").
+- At your limit he tells you to pack it up. You can beg for a few more, but you have to sit
+  through a fake, unskippable joke ad first, and every beg makes the next ad longer.
+- The Doomy tab is a chat: ask how bad today is, get roasted, or ask for a meme.
+
+The ads are jokes made by the app. There are no real ads, no ad network, and no internet access.
+
+### Adding memes, GIFs and stickers
+
+No code needed. Upload images into these folders on GitHub and they appear in the next build:
+
+- `assets/memes/` for finished memes, GIFs and stickers. Shown as they are.
+- `assets/templates/` for plain reaction photos. Doomy writes captions on them ("ME AFTER 40 SHORTS").
+
+PNG, JPG, GIF and WebP all work. GIFs animate. Remember this repository is public, so anything
+you upload here can be seen by others.
 
 ## How it works
 

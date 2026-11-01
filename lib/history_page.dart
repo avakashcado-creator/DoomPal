@@ -20,15 +20,7 @@ class _HistoryPageState extends State<HistoryPage> {
   Map<String, int> _settings = {};
 
   static const _short = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  static const _weekdayNames = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-  ];
+  static const _weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   static const _months = [
     'Jan',
     'Feb',
@@ -82,9 +74,7 @@ class _HistoryPageState extends State<HistoryPage> {
     await Clipboard.setData(ClipboardData(text: _csv()));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content:
-              Text('History copied as CSV. Paste it into a sheet or a note.')),
+      const SnackBar(content: Text('History copied as CSV. Paste it into a sheet or a note.')),
     );
   }
 
@@ -98,8 +88,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final days = List<DateTime>.generate(
-        14, (i) => DateTime(now.year, now.month, now.day - i));
+    final days = List<DateTime>.generate(14, (i) => DateTime(now.year, now.month, now.day - i));
     final noun = trackedNoun(_settings);
     final limit = _dayLimit();
 
@@ -130,14 +119,14 @@ class _HistoryPageState extends State<HistoryPage> {
     ];
 
     final children = <Widget>[
-      const Text('History', style: Txt.heading),
+      const Text('RECEIPTS', style: Txt.wordmark),
       const SizedBox(height: 10),
     ];
 
     if (_loaded && allTime == 0) {
       children.addAll([
         Text(
-          'Nothing here yet. Your history fills in from the first $noun DoomPal counts.',
+          'no receipts yet. doomy starts writing them from ur first $noun.',
           style: Txt.quiet,
         ),
       ]);
@@ -147,21 +136,20 @@ class _HistoryPageState extends State<HistoryPage> {
         Text(
           weekSum == 0
               ? 'No $noun in the last 7 days.'
-              : 'In the last 7 days you scrolled $weekSum $noun, about ${fmtDuration(weekSecs)}. '
-                  'That is around $perDay a day.',
+              : 'last 7 days: $weekSum $noun, about ${fmtDuration(weekSecs)}. '
+                  'that\'s around $perDay a day. doomy has seen everything.',
           style: Txt.body,
         ),
         const SizedBox(height: 4),
-        Text('$allTime since you started counting.', style: Txt.small),
+        Text('$allTime total since u started. framed and on the wall.', style: Txt.small),
         const SizedBox(height: 28),
         WeekChart(days: week, limit: limit),
         if (limit > 0) ...[
           const SizedBox(height: 8),
-          Text('The dashed line is your daily limit of $limit.',
-              style: Txt.small),
+          Text('The dashed line is your daily limit of $limit.', style: Txt.small),
         ],
         const SizedBox(height: 32),
-        const Text('Last two weeks', style: Txt.title),
+        const Text('last two weeks', style: Txt.title),
         const SizedBox(height: 8),
         const Divider(),
         for (final d in days) ...[
@@ -174,7 +162,7 @@ class _HistoryPageState extends State<HistoryPage> {
           child: TextButton.icon(
             onPressed: _export,
             icon: const Icon(Icons.copy_rounded, size: 18),
-            label: const Text('Copy history as CSV'),
+            label: const Text('Copy receipts as CSV'),
           ),
         ),
       ]);
@@ -230,9 +218,9 @@ class _HistoryPageState extends State<HistoryPage> {
             width: 40,
             child: Text(
               '$total',
-              style: Txt.number.copyWith(
+              style: Txt.title.copyWith(
                 fontSize: 17,
-                color: over ? Palette.straw : Palette.lichen,
+                color: over ? Palette.danger : Palette.white,
               ),
               textAlign: TextAlign.end,
             ),

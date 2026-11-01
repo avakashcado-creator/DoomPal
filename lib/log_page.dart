@@ -70,7 +70,7 @@ class _LogPageState extends State<LogPage> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: _text.isEmpty
             ? const Text(
-                'Nothing yet. Turn on "Keep a detection log" in Limits, open YouTube Shorts and swipe a few times. '
+                'Nothing yet. Turn on "Keep a detection log" in Rules, open YouTube Shorts and swipe a few times. '
                 'The newest lines appear at the top.',
                 style: Txt.quiet,
               )
@@ -80,7 +80,7 @@ class _LogPageState extends State<LogPage> {
                   fontFamily: 'monospace',
                   fontSize: 12,
                   height: 1.5,
-                  color: Palette.lichen,
+                  color: Palette.white,
                 ),
               ),
       ),

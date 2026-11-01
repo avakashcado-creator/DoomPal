@@ -4,58 +4,35 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
-/// One tick per reel, up to your limit. Ticks you've used light up in pollen,
-/// and turn straw once you're over.
-class TickRow extends StatelessWidget {
+/// A chunky bar showing how much of today's limit is gone. Turns red once you're over.
+class LimitBar extends StatelessWidget {
   final int count;
   final int limit;
-  const TickRow({super.key, required this.count, required this.limit});
+  const LimitBar({super.key, required this.count, required this.limit});
 
   @override
   Widget build(BuildContext context) {
+    final f = limit <= 0 ? 0.0 : (count / limit).clamp(0.0, 1.0).toDouble();
+    final over = limit > 0 && count >= limit;
     return Semantics(
       label: '$count of $limit used',
-      child: SizedBox(
-        height: 20,
-        width: double.infinity,
-        child: CustomPaint(painter: _TickPainter(count, limit)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          height: 12,
+          child: Stack(
+            children: [
+              const Positioned.fill(child: ColoredBox(color: Palette.bubble)),
+              FractionallySizedBox(
+                widthFactor: f,
+                child: ColoredBox(color: over ? Palette.danger : Palette.doomy),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
-}
-
-class _TickPainter extends CustomPainter {
-  final int count;
-  final int limit;
-  _TickPainter(this.count, this.limit);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (limit <= 0) return;
-    final slots = math.min(limit, 60);
-    final perTick = limit / slots;
-    final lit = (count / perTick).floor().clamp(0, slots);
-    final over = count >= limit;
-    final step = size.width / slots;
-    final w = math.max(2.0, math.min(3.5, step * 0.3));
-    final p = Paint()..isAntiAlias = true;
-    for (var i = 0; i < slots; i++) {
-      final on = i < lit;
-      p.color = on ? (over ? Palette.straw : Palette.pollen) : Palette.vein;
-      // every fifth tick is taller, like the marks on a ruler
-      final h = (i + 1) % 5 == 0 ? size.height : size.height * 0.65;
-      final x = i * step + (step - w) / 2;
-      canvas.drawRRect(
-        RRect.fromLTRBR(
-            x, size.height - h, x + w, size.height, Radius.circular(w / 2)),
-        p,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_TickPainter old) =>
-      old.count != count || old.limit != limit;
 }
 
 class DayBar {
@@ -65,7 +42,7 @@ class DayBar {
   const DayBar(this.label, this.count, this.today);
 }
 
-/// Seven columns, one per day. Days over the limit are drawn in straw.
+/// Seven columns, one per day. Days over the limit are red.
 class WeekChart extends StatelessWidget {
   final List<DayBar> days;
   final int limit;
@@ -91,10 +68,8 @@ class _WeekPainter extends CustomPainter {
   _WeekPainter(this.days, this.limit);
 
   void _text(Canvas c, String s, TextStyle style, Offset center) {
-    final tp = TextPainter(
-      text: TextSpan(text: s, style: style),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final tp = TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)
+      ..layout();
     tp.paint(c, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
@@ -109,63 +84,44 @@ class _WeekPainter extends CustomPainter {
       if (d.count > maxV) maxV = d.count;
     }
     final colW = size.width / days.length;
-    final barW = math.min(26.0, colW * 0.46);
+    final barW = math.min(28.0, colW * 0.5);
     final baseY = topPad + chartH;
-
-    // baseline
-    canvas.drawLine(
-      Offset(0, baseY),
-      Offset(size.width, baseY),
-      Paint()
-        ..color = Palette.vein
-        ..strokeWidth = 1,
-    );
-
+    canvas.drawLine(Offset(0, baseY), Offset(size.width, baseY), Paint()..color = Palette.line);
     for (var i = 0; i < days.length; i++) {
       final d = days[i];
       final cx = colW * i + colW / 2;
       final h = d.count == 0 ? 0.0 : math.max(4.0, chartH * d.count / maxV);
       final over = limit > 0 && d.count > limit;
-      final color = over ? Palette.straw : Palette.pollen;
+      final color = over ? Palette.danger : Palette.doomy;
       if (h > 0) {
-        final r = RRect.fromLTRBAndCorners(
-          cx - barW / 2,
-          baseY - h,
-          cx + barW / 2,
-          baseY,
-          topLeft: Radius.circular(barW / 2),
-          topRight: Radius.circular(barW / 2),
+        canvas.drawRRect(
+          RRect.fromLTRBAndCorners(cx - barW / 2, baseY - h, cx + barW / 2, baseY,
+              topLeft: const Radius.circular(6), topRight: const Radius.circular(6)),
+          Paint()..color = d.today ? color : color.withValues(alpha: 0.5),
         );
-        canvas.drawRRect(r,
-            Paint()..color = d.today ? color : color.withValues(alpha: 0.55));
         _text(
-          canvas,
-          '${d.count}',
-          Txt.small.copyWith(
-              color: d.today ? Palette.lichen : Palette.sage, fontSize: 12),
-          Offset(cx, baseY - h - 11),
-        );
+            canvas,
+            '${d.count}',
+            Txt.small.copyWith(color: d.today ? Palette.white : Palette.muted, fontSize: 12),
+            Offset(cx, baseY - h - 11));
       }
       _text(
         canvas,
         d.label,
         Txt.small.copyWith(
-          color: d.today ? Palette.lichen : Palette.sage,
+          color: d.today ? Palette.white : Palette.muted,
           fontWeight: d.today ? FontWeight.w600 : FontWeight.w400,
         ),
         Offset(cx, baseY + labelH / 2 + 2),
       );
     }
-
-    // dashed limit line
     if (limit > 0) {
       final ly = baseY - chartH * limit / maxV;
       final dash = Paint()
-        ..color = Palette.sage.withValues(alpha: 0.7)
+        ..color = Palette.muted.withValues(alpha: 0.7)
         ..strokeWidth = 1;
       for (double x = 0; x < size.width; x += 8) {
-        canvas.drawLine(
-            Offset(x, ly), Offset(math.min(x + 4, size.width), ly), dash);
+        canvas.drawLine(Offset(x, ly), Offset(math.min(x + 4, size.width), ly), dash);
       }
     }
   }
@@ -174,31 +130,37 @@ class _WeekPainter extends CustomPainter {
   bool shouldRepaint(_WeekPainter old) => true;
 }
 
-/// A small dot plus a word, used for "Counting" / "Not counting".
 class StatusDot extends StatelessWidget {
   final bool on;
-  final String onText;
-  final String offText;
-  const StatusDot(
-      {super.key,
-      required this.on,
-      required this.onText,
-      required this.offText});
+  const StatusDot({super.key, required this.on});
 
   @override
   Widget build(BuildContext context) {
-    final c = on ? const Color(0xFF8CC97E) : Palette.straw;
+    final c = on ? Palette.live : Palette.danger;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 7),
-        Text(on ? onText : offText, style: Txt.small.copyWith(color: c)),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(on ? 'watching' : 'not watching', style: Txt.small.copyWith(color: c)),
       ],
+    );
+  }
+}
+
+class Chip2 extends StatelessWidget {
+  final String text;
+  const Chip2(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+          color: Palette.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Palette.line)),
+      child: Text(text, style: Txt.small.copyWith(color: Palette.white, fontSize: 14)),
     );
   }
 }
@@ -209,7 +171,6 @@ class Choice<T> {
   const Choice(this.value, this.label);
 }
 
-/// Bottom sheet with a short list of options. Returns the picked value, or null.
 Future<T?> pickChoice<T>(
   BuildContext context, {
   required String title,
@@ -231,14 +192,12 @@ Future<T?> pickChoice<T>(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-                child: Text(title, style: Txt.title),
-              ),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+                  child: Text(title, style: Txt.title)),
               if (note != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                  child: Text(note, style: Txt.quiet),
-                ),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                    child: Text(note, style: Txt.quiet)),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
@@ -248,23 +207,16 @@ Future<T?> pickChoice<T>(
                       InkWell(
                         onTap: () => Navigator.of(ctx).pop(c.value),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  c.label,
-                                  style: Txt.body.copyWith(
-                                    color: c.value == current
-                                        ? Palette.pollen
-                                        : Palette.lichen,
-                                  ),
-                                ),
+                                child: Text(c.label,
+                                    style: Txt.body.copyWith(
+                                        color: c.value == current ? Palette.doomy : Palette.white)),
                               ),
                               if (c.value == current)
-                                const Icon(Icons.check,
-                                    color: Palette.pollen, size: 20),
+                                const Icon(Icons.check, color: Palette.doomy, size: 20),
                             ],
                           ),
                         ),

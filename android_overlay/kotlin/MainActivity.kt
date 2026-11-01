@@ -47,6 +47,13 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    "getChat" -> result.success(Store.getChat(ctx))
+                    "addChat" -> {
+                        val who = call.argument<String>("who")
+                        val text = call.argument<String>("text")
+                        if (who != null && text != null) Store.chat(ctx, who, text)
+                        result.success(null)
+                    }
                     "getLog" -> result.success(Store.getLog(ctx))
                     "clearLog" -> {
                         Store.clearLog(ctx)

@@ -69,17 +69,27 @@ class Native {
   /// lastApp (key or ''), lastTime (ms since epoch), snoozeUntil (ms since epoch)
   static Future<NativeStatus> status() async {
     final raw = await _ch.invokeMethod<Map<dynamic, dynamic>>('getStatus');
-    if (raw == null) return const NativeStatus('', 0, 0, 0);
+    if (raw == null) return const NativeStatus('', 0, 0, 0, 0);
     return NativeStatus(
       (raw['lastApp'] as String?) ?? '',
       ((raw['lastTime'] as num?) ?? 0).toInt(),
       ((raw['snoozeUntil'] as num?) ?? 0).toInt(),
       ((raw['snoozesToday'] as num?) ?? 0).toInt(),
+      ((raw['bonusToday'] as num?) ?? 0).toInt(),
     );
   }
 
   static Future<void> setSetting(String key, int value) async {
     await _ch.invokeMethod<void>('setSetting', {'key': key, 'value': value});
+  }
+
+  static Future<String> chat() async {
+    final v = await _ch.invokeMethod<String>('getChat');
+    return v ?? '';
+  }
+
+  static Future<void> addChat(String who, String text) async {
+    await _ch.invokeMethod<void>('addChat', {'who': who, 'text': text});
   }
 
   static Future<String> log() async {
@@ -101,6 +111,7 @@ class NativeStatus {
   final int lastTime;
   final int snoozeUntil;
   final int snoozesToday;
+  final int bonusToday;
   const NativeStatus(
-      this.lastApp, this.lastTime, this.snoozeUntil, this.snoozesToday);
+      this.lastApp, this.lastTime, this.snoozeUntil, this.snoozesToday, this.bonusToday);
 }

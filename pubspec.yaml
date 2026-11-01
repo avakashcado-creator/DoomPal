@@ -12,13 +12,14 @@ dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/doomy/
+    - assets/memes/
+    - assets/templates/
   fonts:
-    - family: FrauncesDisplay
+    - family: Anton
       fonts:
-        - asset: assets/fonts/FrauncesDisplay.ttf
-    - family: Fraunces
-      fonts:
-        - asset: assets/fonts/FrauncesText.ttf
+        - asset: assets/fonts/Anton-Regular.ttf
     - family: Figtree
       fonts:
         - asset: assets/fonts/Figtree-Regular.ttf

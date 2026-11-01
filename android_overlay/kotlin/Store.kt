@@ -74,9 +74,9 @@ object Store {
         val p = prefs(c)
         val e = p.edit()
         for (k in p.all.keys) {
-            if (k.startsWith("c|") || k.startsWith("t|") || k.startsWith("z|")) e.remove(k)
+            if (k.startsWith("c|") || k.startsWith("t|") || k.startsWith("z|") || k.startsWith("b|")) e.remove(k)
         }
-        e.remove("lastApp").remove("lastTime").apply()
+        e.remove("lastApp").remove("lastTime").remove("chat").apply()
     }
 
     // ---- snoozes used today ----
@@ -88,6 +88,34 @@ object Store {
         p.edit().putInt(k, p.getInt(k, 0) + 1).apply()
     }
 
+    // ---- bonus reels won by begging (per day) ----
+    fun bonusToday(c: Context): Int = prefs(c).getInt("b|" + today(), 0)
+
+    fun addBonus(c: Context, n: Int) {
+        val k = "b|" + today()
+        val p = prefs(c)
+        p.edit().putInt(k, p.getInt(k, 0) + n).apply()
+    }
+
+    // ---- when Doomy last checked on you ----
+    fun lastGate(c: Context): Long = prefs(c).getLong("lastGate", 0L)
+
+    fun setLastGate(c: Context, t: Long) {
+        prefs(c).edit().putLong("lastGate", t).apply()
+    }
+
+    // ---- chat with Doomy: "time\twho\ttext" lines, newest last, last 80 kept ----
+    fun chat(c: Context, who: String, text: String) {
+        val clean = text.replace("\n", " ").replace("\t", " ")
+        val p = prefs(c)
+        val cur = p.getString("chat", "") ?: ""
+        val lines = cur.split("\n").filter { it.isNotEmpty() } +
+            (System.currentTimeMillis().toString() + "\t" + who + "\t" + clean)
+        p.edit().putString("chat", lines.takeLast(80).joinToString("\n")).apply()
+    }
+
+    fun getChat(c: Context): String = prefs(c).getString("chat", "") ?: ""
+
     /** Small status map for the Today screen. */
     fun status(c: Context): HashMap<String, Any> {
         val p = prefs(c)
@@ -96,6 +124,7 @@ object Store {
         out["lastTime"] = p.getLong("lastTime", 0L)
         out["snoozeUntil"] = p.getLong("snoozeUntil", 0L)
         out["snoozesToday"] = snoozesToday(c)
+        out["bonusToday"] = bonusToday(c)
         return out
     }
 

@@ -11,22 +11,13 @@ class ReelApp {
 }
 
 const List<ReelApp> reelApps = [
-  ReelApp('youtube', 'YouTube Shorts', 'Shorts', Color(0xFFEE8A7A), true),
-  ReelApp('instagram', 'Instagram Reels', 'reels', Color(0xFFD9A3CF), true),
-  ReelApp('facebook', 'Facebook Reels', 'reels', Color(0xFF9DB8E6), false),
-  ReelApp(
-      'snapchat', 'Snapchat Spotlight', 'Spotlights', Color(0xFFFFC400), false),
+  ReelApp('youtube', 'YouTube Shorts', 'Shorts', Color(0xFFFF5C5C), true),
+  ReelApp('instagram', 'Instagram Reels', 'reels', Color(0xFFE1306C), true),
+  ReelApp('facebook', 'Facebook Reels', 'reels', Color(0xFF1877F2), false),
+  ReelApp('snapchat', 'Snapchat Spotlight', 'Spotlights', Color(0xFFFFC400), false),
 ];
 
-const List<String> weekdayNames = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun'
-];
+const List<String> weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 String dateKey(DateTime d) {
   final y = d.year.toString().padLeft(4, '0');
@@ -94,8 +85,7 @@ double plantHealth(Map<String, int> today, Map<String, int> s) {
 }
 
 /// The limit to draw as ticks: the daily total, or the one app limit if that's all there is.
-({int count, int limit})? tickTarget(
-    Map<String, int> today, Map<String, int> s) {
+({int count, int limit})? tickTarget(Map<String, int> today, Map<String, int> s) {
   final total = s['total'] ?? -1;
   if (total > 0) return (count: sumTracked(today, s), limit: total);
   final withLimits = [

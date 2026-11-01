@@ -1,17 +1,13 @@
 package io.doompal.doompal
 
 import android.accessibilityservice.AccessibilityService
-import android.content.res.ColorStateList
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -19,57 +15,46 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 
 class ReelAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
+    private lateinit var ui: DoomyUi
     private val lastScrollEvent = HashMap<String, Long>()
     private val lastCounted = HashMap<String, Long>()
     private val adSkipStreak = HashMap<String, Int>()
     private var lastPassiveCheck = 0L
+
+    // full-screen Doomy screen (check-in, limit, ad)
     private var overlay: View? = null
-    private var overlayPkg: String = ""
+    private var overlayBox: LinearLayout? = null
+    private var overlayPkg = ""
     private var overlayApp: Targets.App? = null
     private var watcherTicks = 0
+    private var flowToken = 0 // bumps whenever the screen closes, so old delayed steps do nothing
 
-    // While the overlay is up: hide it if the user leaves the app, or leaves the reels screen.
-    private val watcher = object : Runnable {
-        override fun run() {
-            if (overlay == null) return
-            val root = rootInActiveWindow
-            val rootPkg = root?.packageName?.toString()
-            if (root == null || rootPkg != overlayPkg) {
-                hideOverlay()
-                return
-            }
-            watcherTicks++
-            val app = overlayApp
-            val lenient = Store.getSetting(this@ReelAccessibilityService, "lenient", 0) == 1
-            if (app != null && !lenient && watcherTicks % 2 == 0) {
-                if (!ReelDetector.scan(root, app, false).matched) {
-                    hideOverlay()
-                    return
-                }
-            }
-            handler.postDelayed(this, WATCH_MS)
-        }
-    }
+    // live counter pill + comment bubble
+    private var pill: View? = null
+    private var pillText: TextView? = null
+    private var pillPkg = ""
+    private var pillApp: Targets.App? = null
+    private var pillTicks = 0
+    private var bubble: View? = null
 
-    private val autoHome = Runnable {
-        if (overlay != null) goHome()
-    }
+    private val wm: WindowManager get() = getSystemService(WINDOW_SERVICE) as WindowManager
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        ui = DoomyUi(this)
         if (debugOn()) Store.log(this, "service connected (Android " + Build.VERSION.SDK_INT + ")")
     }
 
     private fun debugOn(): Boolean = Store.getSetting(this, "debug", 0) == 1
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
+        if (event == null || !::ui.isInitialized) return
         val pkg = event.packageName?.toString() ?: return
         val app = Targets.byPackage(pkg) ?: return
         if (!Store.isTracked(this, app)) return
@@ -82,30 +67,25 @@ class ReelAccessibilityService : AccessibilityService() {
         }
     }
 
+    // ------------------------------------------------------------------ counting
+
     private fun handleScroll(event: AccessibilityEvent, app: Targets.App, pkg: String, now: Long) {
-        // Ignore purely horizontal scrolls (carousels, stories).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             if (event.scrollDeltaX != 0 && event.scrollDeltaY == 0) return
         }
-
-        // One swipe fires a burst of scroll events. Only the first event after a quiet gap
-        // starts a new gesture; everything inside the burst is ignored.
         val prev = lastScrollEvent[app.key] ?: 0L
         lastScrollEvent[app.key] = now
         if (now - prev < GESTURE_GAP_MS) return
         val lastC = lastCounted[app.key] ?: 0L
         if (now - lastC < MIN_COUNT_INTERVAL_MS) return
+        if (overlay != null) return
 
         val debug = debugOn()
         val lenient = Store.getSetting(this, "lenient", 0) == 1
-
-        // 1) The view that scrolled is the reels pager itself.
         val src: AccessibilityNodeInfo? = event.source
         val srcId = ReelDetector.shortId(src)
         val srcMatch = srcId != null && Targets.matches(app, srcId)
 
-        // 2) For apps without strict mode: look at the whole screen, and only trust it if the
-        //    scrolled view is big (comment sheets and carousels are not full screen).
         var treeMatch = false
         var sample = ""
         var ratio = -1f
@@ -138,8 +118,6 @@ class ReelAccessibilityService : AccessibilityService() {
         }
         if (!inReels) return
 
-        // Sponsored items (ads) are not reels. Skip them, but never more than 3 in a row:
-        // if "ads" keep showing up, the detector is probably wrong, so count normally.
         val adRoot = rootInActiveWindow
         if (adRoot != null) {
             val ad = ReelDetector.adReason(adRoot)
@@ -157,203 +135,402 @@ class ReelAccessibilityService : AccessibilityService() {
 
         lastCounted[app.key] = now
         val n = Store.increment(this, app.key)
+        showPill(app, pkg)
 
-        // Gentle nudge every N reels
         val nudge = Store.getSetting(this, "nudge", 10)
         if (nudge > 0 && n % nudge == 0) {
-            val msg = n.toString() + " " + app.noun + " today, about " +
-                Limits.duration(Store.seconds(this, app.key))
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            val mins = Store.seconds(this, app.key) / 60
+            val limit = Limits.limitFor(this, app)
+            val expr = if (limit > 0 && n >= limit * 0.7) "shocked" else DoomyLines.pick(listOf("judge", "smug", "chill"))
+            showBubble(DoomyLines.milestone(n, app.noun, mins), expr)
         }
 
-        if (Store.isSnoozed(this)) return
         val reason = Limits.exceeded(this, app) ?: return
-        showOverlay(app, pkg, reason)
+        showLimit(app, pkg, reason)
     }
 
-    // Catches "opened reels while already over the limit" (no swipe has happened yet).
+    // Opening reels: show the live counter, Doomy's check-in, or the limit screen.
     private fun handlePassive(app: Targets.App, pkg: String, now: Long) {
         if (now - lastPassiveCheck < PASSIVE_THROTTLE_MS) return
         lastPassiveCheck = now
         if (overlay != null) return
-        if (Store.isSnoozed(this)) return
-        val reason = Limits.exceeded(this, app) ?: return
         val root = rootInActiveWindow ?: return
-        if (ReelDetector.scan(root, app, false).matched) {
-            showOverlay(app, pkg, reason)
+        if (!ReelDetector.scan(root, app, false).matched) return
+
+        val reason = Limits.exceeded(this, app)
+        if (reason != null) {
+            showLimit(app, pkg, reason)
+            return
+        }
+        showPill(app, pkg)
+
+        if (Store.getSetting(this, "gate", 1) == 1) {
+            val every = Store.getSetting(this, "gateEvery", 15).coerceAtLeast(1) * 60_000L
+            val last = Store.lastGate(this)
+            if (now - last >= every) {
+                Store.setLastGate(this, now)
+                val again = now - last < 3 * 3_600_000L
+                showGate(app, pkg, if (again) ((now - last) / 60_000L).toInt() else -1)
+            }
         }
     }
 
-    private fun dp(v: Int): Int =
-        TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
-        ).toInt()
+    // ------------------------------------------------------------------ live counter pill
 
-    // ---- look and feel of the "Take a break" screen (same palette and fonts as the app) ----
-    private val moss = Color.rgb(0x15, 0x22, 0x1D)
-    private val vein = Color.rgb(0x2D, 0x43, 0x39)
-    private val lichen = Color.rgb(0xE3, 0xEA, 0xDB)
-    private val sage = Color.rgb(0x93, 0xA7, 0x99)
-    private val pollen = Color.rgb(0xE9, 0xC4, 0x6A)
+    private fun pillLabel(app: Targets.App): String {
+        val n = Store.count(this, app.key)
+        val limit = Limits.limitFor(this, app)
+        return if (limit > 0) "$n / $limit " + app.noun else "$n " + app.noun
+    }
 
-    private var fontCache = HashMap<String, Typeface>()
-
-    /** The app's own fonts live inside the APK under flutter_assets. Falls back to system fonts. */
-    private fun font(file: String, fallback: Typeface): Typeface {
-        fontCache[file]?.let { return it }
-        val tf = try {
-            Typeface.createFromAsset(assets, "flutter_assets/assets/fonts/" + file)
-        } catch (e: Exception) {
-            fallback
+    private fun showPill(app: Targets.App, pkg: String) {
+        if (Store.getSetting(this, "counter", 1) != 1) return
+        pillText?.let {
+            it.text = pillLabel(app)
+            pillPkg = pkg
+            pillApp = app
+            return
         }
-        fontCache[file] = tf
-        return tf
-    }
-
-    private fun text(s: String, size: Float, color: Int, face: Typeface, topDp: Int, lineExtra: Float = 0f): TextView {
-        val t = TextView(this)
-        t.text = s
-        t.textSize = size
-        t.setTextColor(color)
-        t.typeface = face
-        t.gravity = Gravity.START
-        if (lineExtra > 0f) t.setLineSpacing(dp(lineExtra.toInt()).toFloat(), 1f)
-        val lp = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        lp.topMargin = dp(topDp)
-        t.layoutParams = lp
-        return t
-    }
-
-    private fun pill(s: String, primary: Boolean, topDp: Int, onClick: () -> Unit): TextView {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
         val bg = GradientDrawable()
-        bg.cornerRadius = dp(28).toFloat()
-        if (primary) {
-            bg.setColor(pollen)
-        } else {
-            bg.setColor(Color.TRANSPARENT)
-            bg.setStroke(dp(1), vein)
-        }
-        val ripple = RippleDrawable(ColorStateList.valueOf(Color.argb(48, 255, 255, 255)), bg, null)
+        bg.cornerRadius = ui.dp(20).toFloat()
+        bg.setColor(Color.argb(0xE6, 0, 0, 0))
+        bg.setStroke(ui.dp(1), ui.line)
+        row.background = bg
+        row.setPadding(ui.dp(6), ui.dp(4), ui.dp(14), ui.dp(4))
+        row.addView(ui.avatar("judge", 28))
         val t = TextView(this)
-        t.text = s
-        t.textSize = 16f
-        t.typeface = font("Figtree-SemiBold.ttf", Typeface.DEFAULT_BOLD)
-        t.setTextColor(if (primary) moss else lichen)
-        t.gravity = Gravity.CENTER
-        t.background = ripple
-        t.isClickable = true
-        t.isFocusable = true
-        t.setPadding(dp(20), dp(16), dp(20), dp(16))
-        t.setOnClickListener { onClick() }
-        val lp = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        t.text = pillLabel(app)
+        t.textSize = 14f
+        t.typeface = ui.semibold
+        t.setTextColor(Color.WHITE)
+        val tlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        tlp.leftMargin = ui.dp(8)
+        row.addView(t, tlp)
+
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
         )
-        lp.topMargin = dp(topDp)
-        t.layoutParams = lp
-        return t
+        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        lp.y = ui.dp(52)
+        try {
+            wm.addView(row, lp)
+            pill = row
+            pillText = t
+            pillPkg = pkg
+            pillApp = app
+            pillTicks = 0
+            handler.postDelayed(pillWatcher, WATCH_MS)
+        } catch (e: Exception) {
+            Store.log(this, "pill failed: " + e.message)
+        }
     }
 
-    private fun showOverlay(app: Targets.App, pkg: String, reason: String) {
-        if (overlay != null) return
-        val hard = Store.getSetting(this, "hard", 0) == 1
-        val snoozeMin = Store.getSetting(this, "snooze", 5)
-        val maxSnooze = Store.getSetting(this, "maxSnooze", 2)
-        val used = Store.snoozesToday(this)
-        val snoozesLeft = if (maxSnooze < 0) 99 else maxSnooze - used
-        val canSnooze = !hard && snoozesLeft > 0
-        val goingHome = !canSnooze
-        val bedtime = Limits.inQuietHours(this)
+    private val pillWatcher = object : Runnable {
+        override fun run() {
+            if (pill == null) return
+            val root = rootInActiveWindow
+            if (root == null || root.packageName?.toString() != pillPkg) {
+                hidePill()
+                return
+            }
+            pillTicks++
+            val app = pillApp
+            val lenient = Store.getSetting(this@ReelAccessibilityService, "lenient", 0) == 1
+            if (app != null && !lenient && pillTicks % 2 == 0 && !ReelDetector.scan(root, app, false).matched) {
+                hidePill()
+                return
+            }
+            handler.postDelayed(this, WATCH_MS)
+        }
+    }
 
-        val display = font("FrauncesDisplay.ttf", Typeface.SERIF)
-        val regular = font("Figtree-Regular.ttf", Typeface.DEFAULT)
+    private fun hidePill() {
+        handler.removeCallbacks(pillWatcher)
+        val v = pill ?: return
+        pill = null
+        pillText = null
+        try {
+            wm.removeView(v)
+        } catch (e: Exception) {
+            // already gone
+        }
+    }
 
+    // ------------------------------------------------------------------ comment bubble
+
+    private val hideBubbleRunnable = Runnable { hideBubble() }
+
+    private fun showBubble(text: String, expr: String) {
+        hideBubble()
+        Store.chat(this, "doomy", text)
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.BOTTOM
+        row.setPadding(ui.dp(16), 0, ui.dp(16), 0)
+        row.addView(ui.avatar(expr, 52))
+        val b = TextView(this)
+        b.text = text
+        b.textSize = 16f
+        b.typeface = ui.regular
+        b.setTextColor(Color.WHITE)
+        val bg = GradientDrawable()
+        bg.cornerRadius = ui.dp(20).toFloat()
+        bg.setColor(Color.argb(0xF2, 0x26, 0x26, 0x26))
+        b.background = bg
+        b.setPadding(ui.dp(14), ui.dp(10), ui.dp(14), ui.dp(10))
+        b.maxWidth = (resources.displayMetrics.widthPixels * 0.7).toInt()
+        val blp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        blp.leftMargin = ui.dp(8)
+        blp.bottomMargin = ui.dp(10)
+        row.addView(b, blp)
+
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.BOTTOM or Gravity.START
+        lp.y = ui.dp(150)
+        try {
+            wm.addView(row, lp)
+            bubble = row
+            handler.postDelayed(hideBubbleRunnable, BUBBLE_MS)
+        } catch (e: Exception) {
+            Store.log(this, "bubble failed: " + e.message)
+        }
+    }
+
+    private fun hideBubble() {
+        handler.removeCallbacks(hideBubbleRunnable)
+        val v = bubble ?: return
+        bubble = null
+        try {
+            wm.removeView(v)
+        } catch (e: Exception) {
+            // already gone
+        }
+    }
+
+    // ------------------------------------------------------------------ full screens
+
+    /** Opens an empty full-screen Doomy screen and returns its content column. */
+    private fun openScreen(app: Targets.App, pkg: String): LinearLayout? {
+        if (overlay != null) return null
+        hideBubble()
+        val scroll = ScrollView(this)
+        scroll.setBackgroundColor(Color.argb(0xF7, 0, 0, 0))
+        scroll.isFillViewport = true
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
-        box.gravity = Gravity.CENTER_VERTICAL or Gravity.START
-        box.setBackgroundColor(Color.argb(0xF7, 0x15, 0x22, 0x1D))
-        box.setPadding(dp(32), dp(48), dp(32), dp(40))
-        box.isClickable = true
-        box.isFocusable = false
-
-        // the sprout on its shelf: drooping when you hit a limit, sleepy at bedtime
-        val plant = SproutView(this, if (bedtime) 0.55f else 0.12f, 3f)
-        val plantLp = LinearLayout.LayoutParams(dp(132), dp(176))
-        plant.layoutParams = plantLp
-        box.addView(plant)
-        val shelf = View(this)
-        shelf.setBackgroundColor(vein)
-        val shelfLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
-        shelfLp.topMargin = -dp(3)
-        shelf.layoutParams = shelfLp
-        box.addView(shelf)
-
-        box.addView(text(if (bedtime) "Time to sleep." else "Take a break.", 44f, lichen, display, 28))
-        box.addView(text(reason, 17f, lichen, regular, 12, 3f))
-
-        val total = Store.total(this)
-        val secs = Store.totalSeconds(this)
-        box.addView(text("Today: " + total + " so far, about " + Limits.duration(secs) + ".", 15f, sage, regular, 8))
-
-        val idea = IDEAS[((System.currentTimeMillis() / 60000L) % IDEAS.size).toInt()]
-        box.addView(text("Instead, " + idea, 17f, pollen, regular, 24, 3f))
-
-        if (goingHome) {
-            val why = if (hard) "Hard mode is on." else "You've used today's snoozes."
-            box.addView(text(why + " Taking you home in a moment.", 14f, sage, regular, 20))
-        }
-
-        box.addView(pill("Take me home", true, 32) { goHome() })
-
-        if (canSnooze) {
-            var label = snoozeMin.toString() + " more minutes"
-            if (maxSnooze >= 0) label += " (" + snoozesLeft + " left today)"
-            box.addView(
-                pill(label, false, 12) {
-                    Store.addSnooze(this@ReelAccessibilityService)
-                    Store.setSnoozeUntil(
-                        this@ReelAccessibilityService,
-                        System.currentTimeMillis() + snoozeMin * 60_000L
-                    )
-                    hideOverlay()
-                }
-            )
-        }
+        box.gravity = Gravity.CENTER_VERTICAL
+        box.setPadding(ui.dp(24), ui.dp(56), ui.dp(24), ui.dp(40))
+        scroll.addView(box, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.TOP or Gravity.START
-
-        try {
-            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-            wm.addView(box, lp)
-            overlay = box
+        return try {
+            wm.addView(scroll, lp)
+            overlay = scroll
+            overlayBox = box
             overlayPkg = pkg
             overlayApp = app
             watcherTicks = 0
+            flowToken++
             handler.postDelayed(watcher, WATCH_MS)
-            if (goingHome) handler.postDelayed(autoHome, HARD_HOME_MS)
-            if (debugOn()) Store.log(this, "overlay shown: " + reason)
+            box
         } catch (e: Exception) {
-            Store.log(this, "overlay failed: " + e.message)
+            Store.log(this, "screen failed: " + e.message)
+            null
+        }
+    }
+
+    /** Run [step] after [delay] ms, but only if the same screen is still open. */
+    private fun later(delay: Long, step: () -> Unit) {
+        val token = flowToken
+        handler.postDelayed({ if (overlay != null && token == flowToken) step() }, delay)
+    }
+
+    /** Doomy "types" a few messages one after another, then calls [then]. */
+    private fun doomySays(box: LinearLayout, lines: List<String>, then: () -> Unit) {
+        var t = 0L
+        for (line in lines) {
+            later(t) {
+                val big = line == line.uppercase() && line.any { it.isLetter() }
+                box.addView(ui.bubble(line, mine = false, big = big))
+                Store.chat(this, "doomy", line)
+            }
+            t += 550L
+        }
+        later(t + 150L) { then() }
+    }
+
+    private fun youSay(box: LinearLayout, line: String) {
+        box.addView(ui.bubble(line, mine = true, top = 14))
+        Store.chat(this, "you", line)
+    }
+
+    private fun clearButtons(box: LinearLayout) {
+        val toRemove = (0 until box.childCount).map { box.getChildAt(it) }.filter { it.tag == "button" }
+        toRemove.forEach { box.removeView(it) }
+    }
+
+    private fun addButton(box: LinearLayout, label: String, primary: Boolean, top: Int, onClick: () -> Unit) {
+        val b = ui.button(label, primary, top) { onClick() }
+        b.tag = "button"
+        box.addView(b)
+    }
+
+    /** "boi boi. no reels? why u scrolling" */
+    private fun showGate(app: Targets.App, pkg: String, minutesSinceLast: Int) {
+        val box = openScreen(app, pkg) ?: return
+        box.addView(ui.header("judge"))
+        val lines = if (minutesSinceLast >= 0) DoomyLines.gateAgain(minutesSinceLast) else DoomyLines.pick(DoomyLines.gateOpen)
+        doomySays(box, lines) {
+            addButton(box, DoomyLines.PLEASE, false, 28) {
+                clearButtons(box)
+                youSay(box, DoomyLines.PLEASE)
+                doomySays(box, DoomyLines.gateNo) {
+                    later(700L) { showAd(app, Store.getSetting(this, "adSecs", 10)) { hideOverlay() } }
+                }
+            }
+            addButton(box, DoomyLines.OUT, true, 10) {
+                clearButtons(box)
+                youSay(box, DoomyLines.OUT)
+                doomySays(box, DoomyLines.pick(DoomyLines.proud)) { later(700L) { goHome() } }
+            }
+        }
+    }
+
+    /** "okay bud, time to pack it up now. no more reels." */
+    private fun showLimit(app: Targets.App, pkg: String, reason: String) {
+        val box = openScreen(app, pkg) ?: return
+        hidePill()
+        val bedtime = Limits.inQuietHours(this)
+        val hard = Store.getSetting(this, "hard", 0) == 1
+        val maxBegs = Store.getSetting(this, "maxSnooze", 2)
+        val used = Store.snoozesToday(this)
+        val begsLeft = if (maxBegs < 0) 99 else maxBegs - used
+        val canBeg = !hard && begsLeft > 0
+        val begReels = Store.getSetting(this, "begReels", 5)
+
+        box.addView(ui.header(if (bedtime) "chill" else "dead"))
+        val total = Store.total(this)
+        val stats = "you scrolled " + total + " today, about " + Limits.duration(Store.totalSeconds(this)) + "."
+        val opening = if (bedtime) DoomyLines.bedtime else DoomyLines.pick(DoomyLines.limitOpen)
+        doomySays(box, opening) {
+            box.addView(ui.text(reason + " " + stats, 14f, ui.muted, ui.regular, 14))
+            if (canBeg) {
+                val ask = DoomyLines.begAsk(begReels)
+                val left = if (maxBegs < 0) "" else " (" + begsLeft + " left)"
+                addButton(box, ask + left, false, 24) {
+                    clearButtons(box)
+                    youSay(box, ask)
+                    doomySays(box, DoomyLines.pick(DoomyLines.begReply)) {
+                        // every beg today makes the ad longer
+                        val secs = Store.getSetting(this, "adSecs", 10) * (used + 1)
+                        later(700L) {
+                            showAd(app, secs) {
+                                Store.addSnooze(this)
+                                Store.addBonus(this, begReels)
+                                Store.chat(this, "doomy", "fine. $begReels more. i'm counting.")
+                                hideOverlay()
+                            }
+                        }
+                    }
+                }
+                addButton(box, "take me home", true, 10) { goHome() }
+            } else {
+                val why = if (hard) listOf("hard mode is on.", "no begging. home.") else DoomyLines.noBegs
+                doomySays(box, why) {
+                    addButton(box, "take me home", true, 24) { goHome() }
+                    later(4000L) { goHome() }
+                }
+            }
+        }
+    }
+
+    /** The unskippable joke ad. Calls [done] when the countdown is over and you tap through. */
+    private fun showAd(app: Targets.App, seconds: Int, done: () -> Unit) {
+        val box = overlayBox ?: return
+        box.removeAllViews()
+        flowToken++
+        val ad = DoomyLines.pick(DoomyLines.ads)
+        val n = Store.count(this, app.key)
+        box.addView(ui.adChip())
+        val card = ui.memeCard("ME AFTER " + n + " " + app.noun, DoomyLines.pick(DoomyLines.punchlines), 300)
+        val clp = card.layoutParams as LinearLayout.LayoutParams
+        clp.topMargin = ui.dp(14)
+        box.addView(card)
+        box.addView(ui.text(ad.title, 44f, ui.white, ui.anton, 22))
+        box.addView(ui.text(ad.sub, 17f, ui.muted, ui.regular, 4))
+        val bar = ui.progress(0f, 26)
+        box.addView(bar)
+        val count = ui.text("you can leave in " + seconds, 14f, ui.muted, ui.regular, 10)
+        box.addView(count)
+        Store.chat(this, "doomy", "[ad] " + ad.title + ": " + ad.sub)
+
+        val total = seconds.coerceAtLeast(1)
+        for (i in 1..total) {
+            later(i * 1000L) {
+                ui.setProgress(bar, i.toFloat() / total)
+                val left = total - i
+                if (left > 0) {
+                    count.text = "you can leave in " + left
+                } else {
+                    count.text = "thank u for watching. doomy appreciates u."
+                    addButton(box, "ok i get it", true, 18) { done() }
+                }
+            }
+        }
+    }
+
+    // While a Doomy screen is up: close it if you leave the app or leave the reels screen.
+    private val watcher = object : Runnable {
+        override fun run() {
+            if (overlay == null) return
+            val root = rootInActiveWindow
+            if (root == null || root.packageName?.toString() != overlayPkg) {
+                hideOverlay()
+                return
+            }
+            watcherTicks++
+            val app = overlayApp
+            val lenient = Store.getSetting(this@ReelAccessibilityService, "lenient", 0) == 1
+            if (app != null && !lenient && watcherTicks % 3 == 0 && !ReelDetector.scan(root, app, false).matched) {
+                hideOverlay()
+                return
+            }
+            handler.postDelayed(this, WATCH_MS)
         }
     }
 
     private fun hideOverlay() {
         handler.removeCallbacks(watcher)
-        handler.removeCallbacks(autoHome)
+        flowToken++
         val v = overlay ?: return
         overlay = null
+        overlayBox = null
         overlayApp = null
         try {
-            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
             wm.removeView(v)
         } catch (e: Exception) {
             // already gone
@@ -363,14 +540,19 @@ class ReelAccessibilityService : AccessibilityService() {
     private fun goHome() {
         performGlobalAction(GLOBAL_ACTION_HOME)
         hideOverlay()
+        hidePill()
     }
 
     override fun onInterrupt() {
         hideOverlay()
+        hidePill()
+        hideBubble()
     }
 
     override fun onDestroy() {
         hideOverlay()
+        hidePill()
+        hideBubble()
         super.onDestroy()
     }
 
@@ -379,20 +561,8 @@ class ReelAccessibilityService : AccessibilityService() {
         private const val MIN_COUNT_INTERVAL_MS = 700L
         private const val TALL_RATIO = 0.75f
         private const val PASSIVE_THROTTLE_MS = 1500L
-        private const val WATCH_MS = 700L
-        private const val HARD_HOME_MS = 5000L
+        private const val WATCH_MS = 1000L
+        private const val BUBBLE_MS = 3800L
         private const val MAX_AD_SKIPS = 3
-
-        private val IDEAS = listOf(
-            "drink a glass of water.",
-            "stand up and stretch for one minute.",
-            "step outside for five minutes.",
-            "text a friend instead.",
-            "take ten slow breaths.",
-            "read one page of a book.",
-            "tidy one small thing near you.",
-            "walk around the room.",
-            "think of one thing you would rather do tonight."
-        )
     }
 }

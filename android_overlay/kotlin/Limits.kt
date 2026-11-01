@@ -31,8 +31,9 @@ object Limits {
             val e = Store.getSetting(c, "quietEnd", 6)
             return "Quiet hours (" + pad(s) + " to " + pad(e) + "): " + app.noun + " are blocked."
         }
+        val bonus = Store.bonusToday(c)
         val per = Store.getSetting(c, "limit:" + app.key, -1)
-        if (per >= 0 && Store.count(c, app.key) >= per) {
+        if (per >= 0 && Store.count(c, app.key) >= per + bonus) {
             return if (per == 0) {
                 app.label + " is blocked."
             } else {
@@ -40,7 +41,7 @@ object Limits {
             }
         }
         val total = Store.getSetting(c, "total", -1)
-        if (total >= 0 && Store.total(c) >= total) {
+        if (total >= 0 && Store.total(c) >= total + bonus) {
             return if (total == 0) {
                 "Reels are blocked."
             } else {
@@ -48,5 +49,17 @@ object Limits {
             }
         }
         return null
+    }
+}
+
+/** The limit that applies to an app right now (including begged bonus reels), or -1 if none. */
+fun Limits.limitFor(c: Context, app: Targets.App): Int {
+    val bonus = Store.bonusToday(c)
+    val per = Store.getSetting(c, "limit:" + app.key, -1)
+    val total = Store.getSetting(c, "total", -1)
+    return when {
+        per >= 0 -> per + bonus
+        total >= 0 -> total + bonus
+        else -> -1
     }
 }
